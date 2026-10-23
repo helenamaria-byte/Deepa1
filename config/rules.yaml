@@ -34,7 +34,13 @@ exceptions:               # SKUs that go to the review queue with no auto-recomm
   active_status: Active       # distributor status other than this -> INACTIVE_DISTRIBUTOR
 
 open_orders:              # stock already on order (open purchase orders from Zoho Inventory)
-  include_in_cover: true  # cover = (units on hand + units on order) / weekly demand
+  include_in_cover: true  # cover = (units on hand + units on order that count) / weekly demand
+  count_only_if_arrives_before_stockout: true   # an order counts only if its expected date is on or
+                          # before the day stock on hand runs out; later or undated orders are shown but not counted
+
+review:                   # how decisions are recorded
+  material_change_pct_of_standard: 25   # a change that moves the quantity by more than this % of the
+                          # SKU's standard order needs a reason; smaller changes and approvals do not
 
 rounding:
   cover_decimals: 2

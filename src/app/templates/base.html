@@ -87,6 +87,18 @@
   details.change summary::-webkit-details-marker { display: none; }
   details.change[open] summary { margin-bottom: 8px; }
   details.change form { display: grid; gap: 8px; min-width: 200px; }
+  details.calc { margin-top: 8px; }
+  details.calc summary { font-size: 13px; font-weight: 600; }
+  .calc-t { margin-top: 8px; font-size: 13px; width: 100%; }
+  .calc-t td { padding: 4px 8px 4px 0; border: 0; vertical-align: top; }
+  .calc-t td:first-child { color: var(--muted); white-space: nowrap; width: 1%; padding-right: 14px; }
+  .plan { border: 1px solid var(--line); border-radius: 12px; background: var(--card); padding: 12px 16px; margin: 0 0 14px; }
+  .plan summary { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; color: var(--ink); }
+  .plan summary::-webkit-details-marker { display: none; }
+  .plan .lvl { font-weight: 700; } .plan .lvl.ok { color: var(--green); }
+  .plan .lvl.caution { color: var(--amber); } .plan .lvl.unsafe { color: var(--red); }
+  .plan .more { color: var(--link); font-size: 13px; margin-left: auto; }
+  .plan ul { margin: 10px 0 0; padding-left: 18px; font-size: 14px; }
   @media (max-width: 640px) { .kv { grid-template-columns: 1fr; } h1 { font-size: 22px; } }
 </style>
 </head>

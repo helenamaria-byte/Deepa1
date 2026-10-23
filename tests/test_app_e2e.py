@@ -89,8 +89,9 @@ def test_override_round_trip_and_delete(client):
     assert "HTTP test override" in decisions and "raghav@example.com" in decisions
     oid = re.search(r"/decisions/(\d+)/delete", decisions).group(1)
     r = client.post(f"/decisions/{oid}/delete")
-    assert "Decision removed." in r.text
-    assert get_store().overrides(1) == []
+    assert "Undone" in r.text
+    assert get_store().latest_decisions(1) == {}
+    assert get_store().overrides(1, include_deleted=True)[0]["state"] == "undone"  # kept in history
 
 
 def test_approve_all(client):
@@ -170,10 +171,13 @@ def test_one_click_approve_and_undo(client):
 
 
 def test_change_reason_is_optional(client):
-    r = client.post("/sku/1/SKU003", data={"decision": "CHANGED", "final_qty": "400", "next": "/"})
-    assert "Saved your decision for SKU003" in r.text and "Changed to 400 units" in r.text
+    r = client.post("/sku/1/SKU003", data={"decision": "CHANGED", "final_qty": "350", "next": "/"})
+    assert "Saved your decision for SKU003" in r.text and "Changed to 350 units" in r.text
     d = get_store().latest_decisions(1)["SKU003"]
-    assert d["final_qty"] == 400 and d["reason"] == "Quantity changed (no reason given)"
+    assert d["final_qty"] == 350 and d["reason"] == "Quantity changed (no reason given)"
+    # The SKU007 case from review: a pause changed to 3 units (standard 400) needs no reason.
+    r = client.post("/sku/1/SKU007", data={"decision": "CHANGED", "final_qty": "3", "next": "/"})
+    assert "Saved your decision for SKU007" in r.text
     r = client.post("/sku/1/SKU013", data={"decision": "CHANGED", "final_qty": "90", "reason": "Promo", "next": "/"})
     assert get_store().latest_decisions(1)["SKU013"]["reason"] == "Promo"
 

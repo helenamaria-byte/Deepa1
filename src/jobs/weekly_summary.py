@@ -17,7 +17,7 @@ def weekly_metrics(store: Store, end: date) -> dict:
     runs = [r for r in store.list_runs(200) if start < r["run_date"] <= end]
     latest = next((r for r in runs if r["status"] == "SUCCESS"), None) or store.latest_run()
     since = datetime.combine(start, datetime.min.time())
-    decisions = [o for o in store.overrides() if o["created_at"] >= since]
+    decisions = [o for o in store.overrides(current_only=True) if o["created_at"] >= since]
     counts = latest["counts"] if latest else {}
     total = counts.get("TOTAL", 0)
     return {

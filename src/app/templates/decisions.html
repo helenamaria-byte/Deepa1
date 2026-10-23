@@ -1,12 +1,28 @@
 {% extends "base.html" %}
-{% from "_macros.html" import qty, who_field %}
+{% from "_macros.html" import qty, who_field, status_badge, decide_actions %}
 {% block content %}
 <h1>Decisions</h1>
-<p class="sub">Every approval and change, with who made it and why. This log is also saved as <a href="/judgment-log.md">judgment_log.md</a>.</p>
+<p class="sub">What is decided for the current plan, and the full history of every decision. The history is also saved as <a href="/judgment-log.md">judgment_log.md</a>.</p>
 
-<div class="card" style="margin-bottom:18px">
-  <b>Prefer Excel?</b> Download the plan from the Home page, fill in the <i>Override log</i> sheet
-  (Decision, Your_Qty, Reason), then upload it here.
+{% if run %}
+<h2 style="margin-top:8px">Current plan #{{ run.id }} ({{ run.run_date.strftime('%a %d %b') }}): {{ progress.decided }} of {{ progress.total }} decided</h2>
+<div class="tablewrap"><table>
+  <tr><th>SKU</th><th>Suggestion</th><th>Suggested qty</th><th>Current decision</th></tr>
+  {% for r in current %}
+  <tr id="{{ r.sku_id }}">
+    <td><b>{{ r.sku_id }}</b><div class="muted">{{ r.sku_name }}</div></td>
+    <td>{{ status_badge(r.status) }}</td>
+    <td>{{ 'No order' if r.recommended_qty is none else ('Pause' if r.recommended_qty == 0 else qty(r.recommended_qty)) }}</td>
+    <td style="min-width:240px">{{ decide_actions(r, '/decisions#' ~ r.sku_id) }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+
+<div class="card" style="margin:18px 0">
+  <b>Prefer Excel?</b> Download the plan from Today, fill in the <i>Override log</i> sheet
+  (Decision = Approve or Change, Your_Qty, Reason), then upload it here. Every row is checked first;
+  if any row is wrong, nothing is imported and the problems are listed.
   <form method="post" action="/decisions/upload" enctype="multipart/form-data" class="filters" style="margin:12px 0 0">
     {% if not auth_required %}<div style="min-width:220px">{{ who_field(user, auth_required) }}</div>{% endif %}
     <input type="file" name="file" accept=".xlsx" required>
@@ -14,21 +30,23 @@
   </form>
 </div>
 
+<h2>History of every decision</h2>
+<p class="muted" style="margin-top:-4px">Nothing is deleted. <b>Current</b> = in force for that plan · <b>Replaced</b> = a later decision took over · <b>Undone</b> = reversed, the SKU went back to waiting.</p>
 <div class="tablewrap"><table>
-  <tr><th>When (UTC)</th><th>Run</th><th>SKU</th><th>Decision</th><th>Suggested</th><th>Final</th><th>Reason</th><th>By</th><th></th></tr>
+  <tr><th>When (UTC)</th><th>Plan</th><th>SKU</th><th>Decision</th><th>Suggested</th><th>Before → final</th><th>Reason</th><th>By</th><th>State</th></tr>
   {% for o in rows %}
-  <tr style="{{ 'opacity:.5' if o.deleted_at }}">
+  <tr style="{{ 'opacity:.55' if o.state != 'current' }}">
     <td>{{ o.created_at.strftime('%d %b %Y %H:%M') }}</td>
-    <td>#{{ o.run_id }}</td>
+    <td>#{{ o.run_id }}{% if run and o.run_id != run.id %}<div class="muted">earlier plan</div>{% endif %}</td>
     <td><a href="/sku/{{ o.run_id }}/{{ o.sku_id }}">{{ o.sku_id }}</a></td>
     <td>{% if o.decision == 'APPROVED' %}<span class="badge green">Approved</span>{% else %}<span class="badge blue">Changed</span>{% endif %}</td>
     <td>{{ qty(o.recommended_qty) }}</td>
-    <td>{{ qty(o.final_qty) }}</td>
+    <td>{{ qty(o.previous_qty) }} → <b>{{ qty(o.final_qty) }}</b></td>
     <td class="why">{{ o.reason }}</td>
     <td>{{ o.username }}</td>
-    <td>{% if o.deleted_at %}<span class="muted">removed by {{ o.deleted_by }}</span>{% else %}
-      <form method="post" action="/decisions/{{ o.id }}/delete" onsubmit="return confirm('Remove this decision?')">
-        <button class="btn small danger">Remove</button></form>{% endif %}</td>
+    <td>{% if o.state == 'current' %}<span class="badge green">Current</span>
+        {% elif o.state == 'replaced' %}<span class="badge grey">Replaced</span><div class="muted">{{ o.superseded_at.strftime('%d %b %H:%M') }}</div>
+        {% else %}<span class="badge red">Undone</span><div class="muted">by {{ o.deleted_by }}, {{ o.deleted_at.strftime('%d %b %H:%M') }}</div>{% endif %}</td>
   </tr>
   {% else %}
   <tr><td colspan="9" class="muted">No decisions yet.</td></tr>

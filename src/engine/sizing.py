@@ -30,3 +30,15 @@ def size(flags: list[str], exception_codes: list[str], standard_qty: float,
     if HIGH_DEMAND in flags:
         return HIGH_DEMAND, math.ceil(round(standard_qty * multiplier, 6))
     return "OK", None
+
+
+def is_material_change(recommended_qty: int | None, final_qty: int | None, standard_qty: float | None,
+                       rules: RulesConfig) -> bool:
+    """A change that moves the order by more than review.material_change_pct_of_standard
+    of the SKU's standard order. "No order" and "pause" count as 0."""
+    if final_qty is None:
+        return False
+    base = recommended_qty or 0
+    if not standard_qty:
+        return final_qty != base
+    return abs(final_qty - base) > standard_qty * rules.review.material_change_pct_of_standard / 100

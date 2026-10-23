@@ -59,6 +59,11 @@ class Rounding(BaseModel):
 
 class OpenOrders(BaseModel):
     include_in_cover: bool = True
+    count_only_if_arrives_before_stockout: bool = True
+
+
+class Review(BaseModel):
+    material_change_pct_of_standard: float = Field(default=25, ge=0)
 
 
 class RulesConfig(BaseModel):
@@ -69,6 +74,7 @@ class RulesConfig(BaseModel):
     exceptions: Exceptions
     rounding: Rounding
     open_orders: OpenOrders = Field(default_factory=OpenOrders)  # older rule versions predate this
+    review: Review = Field(default_factory=Review)
 
     def to_yaml(self) -> str:
         return yaml.safe_dump(self.model_dump(), sort_keys=False)

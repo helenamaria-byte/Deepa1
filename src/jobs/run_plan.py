@@ -46,6 +46,17 @@ def now_ist() -> datetime:
     return datetime.now(IST)
 
 
+def last_scheduled_run(now: datetime) -> datetime:
+    """The most recent Monday/Thursday 06:00 IST at or before `now`."""
+    now = now.astimezone(IST)
+    for days in range(8):
+        day = now.date() - timedelta(days=days)
+        slot = datetime.combine(day, RUN_TIME_IST, IST)
+        if day.weekday() in RUN_WEEKDAYS and slot <= now:
+            return slot
+    raise AssertionError("unreachable")
+
+
 def next_scheduled_run(now: datetime) -> datetime:
     """The next Monday/Thursday 06:00 IST strictly after `now`."""
     now = now.astimezone(IST)
@@ -55,6 +66,14 @@ def next_scheduled_run(now: datetime) -> datetime:
         if day.weekday() in RUN_WEEKDAYS and slot > now:
             return slot
     raise AssertionError("unreachable")
+
+
+def source_label(connector: Connector) -> str:
+    """Plain description of where the data came from (never claims more than is true)."""
+    if connector.name == "csv_folder" and not settings.data_source_url:
+        return "Sample CSV files bundled with the app (demo data, not a live SAP export)"
+    return {"csv_folder": "CSV export folder", "https": "SAP exports over HTTPS", "s3": "SAP exports in S3",
+            "sftp": "SAP exports over SFTP"}.get(connector.name, connector.name)
 
 
 def _scrub(text: str) -> str:
@@ -86,9 +105,11 @@ def run_plan(run_date: date | None = None, trigger: str = "manual", store: Store
     try:
         rules_version, rules = store.current_rules()
         raw = with_retry(connector.fetch, f"connector:{connector.name}", sleep=sleep, on_attempt=count_attempt)
+        fetched_at = utcnow()
         source = connector.name
         zoho = zoho or ZohoConnector()
         zoho_warning = ""
+        zoho_state = "off" if not zoho.enabled else ("read" if zoho.configured else "not configured")
         if zoho.enabled:
             # Stock on order. If Zoho is down the plan still runs, with a clear warning.
             try:
@@ -96,11 +117,14 @@ def run_plan(run_date: date | None = None, trigger: str = "manual", store: Store
                 source += "+zoho"
             except RetryError as exc:
                 log.warning("Zoho unavailable: %s", type(exc.last).__name__)
+                zoho_state = "unavailable"
                 zoho_warning = ("Open purchase orders could not be read from Zoho, so weeks of stock do not "
                                 "include stock already on order. Check orders in transit before reordering.")
         result = run_engine(raw, run_date, rules)
         if zoho_warning:
             result.warnings.append(zoho_warning)
+        data_info = {**result.coverage, "source": source_label(connector), "fetched_at": fetched_at.isoformat(),
+                     "zoho": zoho_state}
 
         explainer = explainer or Explainer(settings.anthropic_api_key, settings.anthropic_model,
                                            cache=store.ai_cache())
@@ -117,7 +141,8 @@ def run_plan(run_date: date | None = None, trigger: str = "manual", store: Store
         with_retry(lambda: store.update_run(
             run_id, status="SUCCESS", finished_at=utcnow(), rules_version=rules_version,
             festival=result.festival, data_week=result.data_week, connector=source,
-            attempts=attempts["n"], warnings=result.warnings, counts=counts), "database:finish", sleep=sleep)
+            attempts=attempts["n"], warnings=result.warnings, counts=counts, data_info=data_info),
+            "database:finish", sleep=sleep)
 
         run = store.get_run(run_id)
         if send_email:
@@ -143,7 +168,7 @@ def send_alert(store: Store, mailer: Mailer, run: dict, rules, rules_version: in
     recs = store.recommendations(run["id"])
     need = [r for r in recs if r["status"] != "OK"]
     need.sort(key=lambda r: STATUS_ORDER.index(r["status"]))
-    workbook = build_workbook(run, recs, store.overrides(run["id"]), rules, rules_version)
+    workbook = build_workbook(run, recs, store.overrides(run["id"], current_only=True), rules, rules_version)
     html = render("alert.html", run=run, counts=run["counts"], need_review=len(need), rows=need,
                   uplift_pct=round((rules.festival.uplift - 1) * 100))
     to = settings.recipients["raghav"] + settings.recipients["procurement"]

@@ -19,8 +19,13 @@ from src.store.models import (SCHEMA_VERSION, AiCacheEntry, Base, EmailLog, Over
                               RulesVersion, Run, SchemaInfo, User, utcnow)
 
 PBKDF2_ROUNDS = 200_000
-COLUMN_MIGRATIONS = [("on_order", "FLOAT DEFAULT 0"),        # schema v2
-                     ("sales_history", "TEXT DEFAULT '[]'")]  # schema v3
+# (table, column, DDL): columns added after the first release, applied to older databases.
+COLUMN_MIGRATIONS = [("recommendations", "on_order", "FLOAT DEFAULT 0"),        # schema v2
+                     ("recommendations", "sales_history", "TEXT DEFAULT '[]'"),  # schema v3
+                     ("recommendations", "calc", "TEXT DEFAULT '{}'"),           # schema v4
+                     ("runs", "data_info", "TEXT DEFAULT '{}'"),                 # schema v4
+                     ("overrides", "previous_qty", "INTEGER"),                   # schema v4
+                     ("overrides", "superseded_at", "TIMESTAMP")]                # schema v4
 
 
 @lru_cache(maxsize=8)
@@ -51,6 +56,7 @@ def _rec_to_dict(r: Recommendation) -> dict:
     d["flags"] = json.loads(r.flags)
     d["exception_codes"] = json.loads(r.exception_codes)
     d["sales_history"] = json.loads(r.sales_history or "[]")
+    d["calc"] = json.loads(r.calc or "{}")
     return d
 
 
@@ -58,7 +64,19 @@ def _run_to_dict(r: Run) -> dict:
     d = {c.name: getattr(r, c.name) for c in Run.__table__.columns}
     d["warnings"] = json.loads(r.warnings or "[]")
     d["counts"] = json.loads(r.counts or "{}")
+    d["data_info"] = json.loads(r.data_info or "{}")
     return d
+
+
+def _override_to_dict(o: Override) -> dict:
+    d = {c.name: getattr(o, c.name) for c in Override.__table__.columns}
+    d["state"] = "undone" if o.deleted_at else ("replaced" if o.superseded_at else "current")
+    return d
+
+
+def _active(q):
+    """Decisions that are neither undone nor replaced."""
+    return q.where(Override.deleted_at.is_(None), Override.superseded_at.is_(None))
 
 
 class Store:
@@ -72,11 +90,13 @@ class Store:
         version and seed rules v1."""
         Base.metadata.create_all(self.engine)
         # Add columns to databases created before they existed.
-        columns = {c["name"] for c in inspect(self.engine).get_columns("recommendations")}
-        for name, ddl in COLUMN_MIGRATIONS:
-            if name not in columns:
+        insp = inspect(self.engine)
+        existing = {t: {c["name"] for c in insp.get_columns(t)} for t in {m[0] for m in COLUMN_MIGRATIONS}}
+        for table, name, ddl in COLUMN_MIGRATIONS:
+            if name not in existing[table]:
                 with self.engine.begin() as conn:
-                    conn.execute(text(f"ALTER TABLE recommendations ADD COLUMN {name} {ddl}"))
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+        self._mark_replaced_decisions()
         with self.Session.begin() as s:
             current = s.scalar(select(func.max(SchemaInfo.version)))
             if current is None or current < SCHEMA_VERSION:
@@ -84,6 +104,16 @@ class Store:
             if not s.scalar(select(func.count()).select_from(RulesVersion)):
                 s.add(RulesVersion(id=1, yaml_text=default_rules_yaml(), created_by="system",
                                    note="Initial rules from config/rules.yaml"))
+
+    def _mark_replaced_decisions(self) -> None:
+        """Keep one current decision per (run, SKU). Older active decisions (from before
+        v4, e.g. repeated clicks) are marked replaced, never deleted."""
+        with self.Session.begin() as s:
+            rows = list(s.scalars(_active(select(Override)).order_by(Override.run_id, Override.sku_id,
+                                                                     Override.created_at, Override.id)))
+            for older, newer in zip(rows, rows[1:]):
+                if (older.run_id, older.sku_id) == (newer.run_id, newer.sku_id):
+                    older.superseded_at = newer.created_at
 
     # ---- rules -----------------------------------------------------------
     def current_rules(self) -> tuple[int, RulesConfig]:
@@ -101,6 +131,12 @@ class Store:
             s.add(RulesVersion(id=next_id, yaml_text=rules.to_yaml(), created_by=user, note=note))
         return next_id
 
+    def rules_for_version(self, version: int | None) -> RulesConfig:
+        """The rules a run actually used (falls back to the current rules)."""
+        with self.Session() as s:
+            rv = s.get(RulesVersion, version) if version else None
+        return rules_from_yaml(rv.yaml_text) if rv else self.current_rules()[1]
+
     def rules_history(self) -> list[RulesVersion]:
         with self.Session() as s:
             return list(s.scalars(select(RulesVersion).order_by(RulesVersion.id.desc())))
@@ -115,7 +151,7 @@ class Store:
             return run.id
 
     def update_run(self, run_id: int, **fields) -> None:
-        for key in ("warnings", "counts"):
+        for key in ("warnings", "counts", "data_info"):
             if key in fields and not isinstance(fields[key], str):
                 fields[key] = json.dumps(fields[key])
         with self.Session.begin() as s:
@@ -131,6 +167,7 @@ class Store:
                 data["flags"] = json.dumps(list(row.get("flags", [])))
                 data["exception_codes"] = json.dumps(list(row.get("exception_codes", [])))
                 data["sales_history"] = json.dumps(row.get("sales_history", []))
+                data["calc"] = json.dumps(row.get("calc", {}), default=str)
                 s.add(Recommendation(run_id=run_id, **data))
 
     def get_run(self, run_id: int) -> dict | None:
@@ -166,7 +203,13 @@ class Store:
     # ---- overrides -------------------------------------------------------
     def add_override(self, run_id: int, sku_id: str, decision: str, final_qty: int | None,
                      reason: str, username: str) -> int:
-        """Record a review decision. A reason is mandatory for every decision."""
+        """Record a decision as an event and make it the SKU's current decision for the run.
+
+        - The same decision again (a repeated click) is not stored twice: the current
+          event's id is returned.
+        - A different decision replaces the current one (marked replaced, kept in history)
+          and records the value it replaced in previous_qty.
+        A reason is always stored; the app supplies a default when none is typed."""
         reason = (reason or "").strip()
         if not reason:
             raise ValueError("A reason is required.")
@@ -183,35 +226,61 @@ class Store:
         else:
             final_qty = rec["recommended_qty"]
         with self.Session.begin() as s:
+            # Lock the recommendation row (Postgres) so two quick clicks are applied one after the other.
+            s.execute(select(Recommendation.id).where(Recommendation.run_id == run_id,
+                                                      Recommendation.sku_id == sku_id).with_for_update())
+            current = s.scalars(_active(select(Override)).where(Override.run_id == run_id, Override.sku_id == sku_id)
+                                .order_by(Override.created_at.desc(), Override.id.desc())).first()
+            if current and current.decision == decision and current.final_qty == final_qty:
+                return current.id
+            previous = current.final_qty if current else rec["recommended_qty"]
+            if current:
+                current.superseded_at = utcnow()
             ov = Override(run_id=run_id, sku_id=sku_id, decision=decision, final_qty=final_qty,
-                          recommended_qty=rec["recommended_qty"], reason=reason, username=username)
+                          recommended_qty=rec["recommended_qty"], previous_qty=previous, reason=reason,
+                          username=username)
             s.add(ov)
             s.flush()
             return ov.id
 
     def delete_override(self, override_id: int, username: str) -> bool:
+        """Undo the current decision: the SKU goes back to waiting for a decision. The
+        event stays in the history, marked undone with who and when. Replaced or
+        already-undone events cannot be undone."""
         with self.Session.begin() as s:
             ov = s.get(Override, override_id)
-            if ov is None or ov.deleted_at is not None:
+            if ov is None or ov.deleted_at is not None or ov.superseded_at is not None:
                 return False
             ov.deleted_at, ov.deleted_by = utcnow(), username
             return True
 
-    def overrides(self, run_id: int | None = None, include_deleted: bool = False) -> list[dict]:
+    def overrides(self, run_id: int | None = None, include_deleted: bool = False,
+                  current_only: bool = False) -> list[dict]:
+        """Decision events, newest first. Each carries state: current, replaced or undone."""
         q = select(Override).order_by(Override.created_at.desc(), Override.id.desc())
         if run_id is not None:
             q = q.where(Override.run_id == run_id)
-        if not include_deleted:
+        if current_only:
+            q = _active(q)
+        elif not include_deleted:
             q = q.where(Override.deleted_at.is_(None))
         with self.Session() as s:
-            return [{c.name: getattr(o, c.name) for c in Override.__table__.columns} for o in s.scalars(q)]
+            return [_override_to_dict(o) for o in s.scalars(q)]
 
     def latest_decisions(self, run_id: int) -> dict[str, dict]:
-        """Most recent (non-deleted) decision per SKU for a run."""
+        """The current decision per SKU for a run (one at most)."""
         out: dict[str, dict] = {}
-        for o in self.overrides(run_id):
+        for o in self.overrides(run_id, current_only=True):
             out.setdefault(o["sku_id"], o)
         return out
+
+    def decision_progress(self, run_id: int) -> dict:
+        """The one place decision counts come from, so every page agrees."""
+        with self.Session() as s:
+            total = s.scalar(select(func.count()).select_from(Recommendation)
+                             .where(Recommendation.run_id == run_id)) or 0
+        decided = len(self.latest_decisions(run_id))
+        return {"total": total, "decided": decided, "pending": total - decided}
 
     # ---- emails ----------------------------------------------------------
     def log_email(self, kind: str, recipients: list[str], subject: str, status: str,

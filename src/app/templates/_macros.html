@@ -29,7 +29,7 @@
     <div class="muted">by {{ d.username }}{% if d.decision == 'CHANGED' %}: “{{ d.reason }}”{% endif %}</div></div>
   <form method="post" action="/decisions/{{ d.id }}/delete" class="inline">
     <input type="hidden" name="next" value="{{ next }}">
-    <button class="btn small light">Undo</button></form>
+    <button class="btn small light" title="Back to waiting for a decision. The decision stays in the history, marked undone.">Undo</button></form>
 {%- else %}
   {% if r.status != 'EXCEPTION' %}
   <form method="post" action="/sku/{{ r.run_id }}/{{ r.sku_id }}" class="inline">
@@ -44,12 +44,45 @@
       <input type="hidden" name="decision" value="CHANGED">
       <input type="hidden" name="next" value="{{ next }}">
       <input type="number" name="final_qty" min="0" step="1" required placeholder="Units to order (0 = none)">
-      <input type="text" name="reason" placeholder="Reason (optional)">
+      <input type="text" name="reason" placeholder="Reason (needed for big changes)">
       <button class="btn small">Save</button>
     </form>
   </details>
 {%- endif %}
 </div>
+{%- endmacro %}
+
+{# Every number behind one suggestion, collapsed by default. Values come from the run (recommendations.calc). #}
+{% macro calc_details(r, open=False) -%}
+{%- set c = r.calc or {} -%}
+<details class="calc" {{ 'open' if open }}>
+  <summary>Calculation details</summary>
+  {% if not c %}
+  <p class="muted">Not stored for this plan (made before calculation details were recorded).</p>
+  {% else %}
+  <table class="calc-t">
+    <tr><td>Average weekly sales</td><td>{{ '{:,}'.format(c.baseline_demand) if c.baseline_demand is not none else '—' }} units <span class="muted">({{ c.baseline_label }})</span></td></tr>
+    {% if c.multiplier and c.multiplier != 1 %}
+    <tr><td>Festival uplift</td><td>× {{ c.multiplier }} = <b>{{ '{:,}'.format(c.weekly_demand) }} units a week</b> <span class="muted">(used for every stock check; the high-demand check compares raw averages, so the uplift is applied once)</span></td></tr>
+    {% else %}
+    <tr><td>Weekly demand used</td><td>{{ '{:,}'.format(c.weekly_demand) if c.weekly_demand is not none else '—' }} units <span class="muted">(no festival uplift this month)</span></td></tr>
+    {% endif %}
+    <tr><td>Stock on hand</td><td>{{ qty(r.on_hand|int if r.on_hand is not none else none) }} units{% if r.inventory_as_of %} <span class="muted">as of {{ r.inventory_as_of.strftime('%d %b') }}</span>{% endif %}
+      {% if c.cover_on_hand is not none %} = {{ c.cover_on_hand }} weeks{% if c.runs_out_label %}, runs out around {{ c.runs_out_label }} without new stock{% endif %}{% endif %}</td></tr>
+    <tr><td>Open purchase orders</td><td>
+      {% if c.incoming %}
+        {% for po in c.incoming %}<div>{{ po.po }}: {{ '{:,.0f}'.format(po.units) }} units, {{ 'counted' if po.counted else 'not counted' }} <span class="muted">({{ po.note }})</span></div>{% endfor %}
+      {% else %}None{% endif %}</td></tr>
+    <tr><td>Weeks of stock used by the rules</td><td><b>{{ r.cover_weeks if r.cover_weeks is not none else '—' }}</b> <span class="muted">(stock on hand{% if c.on_order_counted %} + {{ '{:,.0f}'.format(c.on_order_counted) }} counted on order{% endif %}, divided by weekly demand)</span></td></tr>
+    <tr><td>Target range</td><td>{{ r.min_cover|int }} to {{ r.max_cover|int }} weeks <span class="muted">({{ 'perishable window' if r.perishable else 'standard window' }})</span></td></tr>
+    {% if r.avg12 %}<tr><td>Demand trend</td><td>last 4 weeks {{ r.avg4 }} vs last 12 weeks {{ r.avg12 }} a week ({{ '%+d'|format(((r.avg4 / r.avg12 - 1) * 100)|round|int) }}%)</td></tr>{% endif %}
+    <tr><td>Suggested quantity</td><td><b>{{ c.qty_formula }}</b></td></tr>
+    {% for chk in c.checks %}<tr><td>{{ 'Check' if loop.first else '' }}</td><td>{{ chk }}</td></tr>{% endfor %}
+    <tr><td>Supplier lead time</td><td class="muted">{{ c.lead_time }}</td></tr>
+  </table>
+  <p class="muted" style="margin:6px 0 0">Calculated by the documented planning rules from this plan's data. Not a forecast.</p>
+  {% endif %}
+</details>
 {%- endmacro %}
 
 {% macro decision_cell(r, next) -%}{{ decide_actions(r, next) }}{%- endmacro %}

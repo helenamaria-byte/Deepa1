@@ -12,7 +12,7 @@ numbered version in the database; every run records which version it used.
 | avg4 | Mean weekly units sold over the last 4 complete weeks |
 | Festival run | The run date's month is marked `Is_Festival_Month = TRUE` in `calendar.csv` (Oct, Nov, Mar) |
 | Weekly demand | avg12 × 1.25 in a festival run, otherwise avg12 |
-| Cover (weeks) | (Units on hand + units on open purchase orders in Zoho) ÷ weekly demand. Stock across locations is summed |
+| Cover (weeks) | (Units on hand + units on open purchase orders in Zoho that arrive before stock on hand runs out) ÷ weekly demand. Stock across locations is summed. Later or undated orders are shown but not counted |
 | Perishable | `sku_master.Perishability = High` |
 
 If the newest sales week in the export is older than the last complete week (the SAP export is
@@ -29,6 +29,12 @@ late), the run uses the newest available week and shows a warning on the dashboa
 | 5 | Perishable SKUs | Perishability = High | Window of 3 to 4 weeks replaces rules 2 and 3 |
 
 Rule 1 does not use the uplift: it would multiply both averages, so it cancels out of the ratio.
+
+## Boundaries
+
+Thresholds are strict: exactly 6.00 weeks is not a stockout, exactly 14.00 is not an overstock (3.00 and 4.00 for
+perishables), and recent sales exactly 20% above the 12-week average are not "high demand". Comparisons are made
+at 6 decimal places so float rounding cannot flip a value that sits on a threshold.
 
 ## When flags combine
 

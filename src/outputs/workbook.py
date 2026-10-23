@@ -99,24 +99,35 @@ def build_workbook(run: dict, recs: list[dict], overrides: list[dict], rules: Ru
     return buf.getvalue()
 
 
-def read_override_sheet(raw: bytes) -> list[dict]:
-    """New decisions from an uploaded workbook's Override log sheet."""
+def read_import(raw: bytes) -> dict:
+    """Read an uploaded workbook: the run it was made for (Run info sheet) and every
+    new row of the Override log sheet, unvalidated, with its spreadsheet row number."""
     wb = load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
     if "Override log" not in wb.sheetnames:
         raise ValueError("The file has no 'Override log' sheet.")
     rows = list(wb["Override log"].iter_rows(values_only=True))
     if not rows or [str(h) for h in rows[0][:len(OVERRIDE_HEADERS)]] != OVERRIDE_HEADERS:
         raise ValueError("The 'Override log' sheet does not have the expected columns.")
+    run_id = None
+    if "Run info" in wb.sheetnames:
+        for row in wb["Run info"].iter_rows(values_only=True):
+            if row and row[0] == "Run ID":
+                run_id = row[1] if len(row) > 1 else None
     out = []
-    for row in rows[1:]:
+    for n, row in enumerate(rows[1:], start=2):
         sku, _, _, decision, qty, reason, _, ts = (list(row) + [None] * 8)[:8]
-        if not sku or not decision or ts:
+        if not sku or decision in (None, "") or ts:  # blank rows and already-recorded decisions
             continue
-        decision = str(decision).strip().lower()
-        out.append({
-            "sku_id": str(sku).strip(),
-            "decision": "APPROVED" if decision.startswith("approve") else "CHANGED",
-            "final_qty": int(qty) if qty not in (None, "") else None,
-            "reason": str(reason or "").strip(),
-        })
+        out.append({"row": n, "sku_id": str(sku).strip(), "decision": str(decision).strip(),
+                    "qty": qty, "reason": str(reason or "").strip()})
+    return {"run_id": run_id, "rows": out}
+
+
+def read_override_sheet(raw: bytes) -> list[dict]:
+    """New decisions from an uploaded workbook (simple form, used by tests and scripts)."""
+    out = []
+    for r in read_import(raw)["rows"]:
+        out.append({"sku_id": r["sku_id"],
+                    "decision": "APPROVED" if r["decision"].lower().startswith("approve") else "CHANGED",
+                    "final_qty": int(r["qty"]) if r["qty"] not in (None, "") else None, "reason": r["reason"]})
     return out

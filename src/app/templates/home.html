@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import run_line, qty, decide_actions %}
+{% from "_macros.html" import run_line, qty, decide_actions, calc_details %}
 {% block content %}
 <style>
   .top { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end; justify-content:space-between; margin-bottom:18px; }
@@ -50,6 +50,19 @@
   <a class="btn light small" href="/runs/{{ run.id }}/workbook">Download Excel</a>
 </div>
 
+<details class="plan" {{ 'open' if plan.level != 'ok' }}>
+  <summary>
+    <span class="lvl {{ plan.level }}">{{ '✓' if plan.level == 'ok' else '⚠' }} {{ plan.label }}</span>
+    <span class="muted">{{ plan['items'][0][1] }}</span>
+    {% if plan.demo %}<span class="badge grey">Demo data</span>{% endif %}
+    <span class="more">Data details</span>
+  </summary>
+  <div class="kv" style="margin-top:10px;font-size:14px">
+    {% for label, value in plan['items'][1:] %}<div>{{ label }}</div><div>{{ value }}</div>{% endfor %}
+  </div>
+  {% if plan.warnings %}<ul>{% for w in plan.warnings %}<li class="lvl {{ plan.level }}" style="font-weight:400">{{ w }}</li>{% endfor %}</ul>{% endif %}
+</details>
+
 {% if todo %}
 <div class="status" role="status">
   <div>
@@ -72,7 +85,6 @@
 {% if last_any and last_any.status == 'FAILED' and last_any.id != run.id %}
   <div class="err">The latest run (#{{ last_any.id }}) failed. You are seeing the last good plan. <a href="/runs">See details</a></div>
 {% endif %}
-{% for w in run.warnings %}<div class="warn">⚠ {{ w }}</div>{% endfor %}
 
 {% if not user and not auth_required %}
 <form method="post" action="/me" class="card" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:8px">
@@ -97,7 +109,7 @@
       <b>{{ r.sku_id }}</b> · {{ r.sku_name }}
       <div class="muted">{{ r.distributor_name }}{% if r.category %} · {{ r.category }}{% endif %}{% if r.perishable %} · <b>perishable</b>{% endif %}</div>
       <div class="chips">{% for c in r.chips %}<span class="chip">{{ c }}</span>{% endfor %}</div>
-      <a class="why-txt" href="/sku/{{ run.id }}/{{ r.sku_id }}">Details</a>
+      {{ calc_details(r) }}
     </div>
 
     <div class="sugg">

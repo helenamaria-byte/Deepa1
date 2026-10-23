@@ -10,7 +10,7 @@ from sqlalchemy import (Boolean, CheckConstraint, Date, DateTime, Float, Foreign
                         String, Text, UniqueConstraint)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-SCHEMA_VERSION = 3  # v2: recommendations.on_order (Zoho POs); v3: recommendations.sales_history
+SCHEMA_VERSION = 4  # v2: on_order; v3: sales_history; v4: calc, run data_info, decision previous_qty/superseded_at
 
 
 def utcnow() -> datetime:
@@ -64,6 +64,7 @@ class Run(Base):
     warnings: Mapped[str] = mapped_column(Text, default="[]")
     counts: Mapped[str] = mapped_column(Text, default="{}")
     error: Mapped[str] = mapped_column(Text, default="")
+    data_info: Mapped[str] = mapped_column(Text, default="{}")  # v4: what data the run used (see run_plan.data_info)
 
 
 class Recommendation(Base):
@@ -95,9 +96,12 @@ class Recommendation(Base):
     explanation: Mapped[str] = mapped_column(Text, default="")
     explanation_source: Mapped[str] = mapped_column(String(20), default="template")
     sales_history: Mapped[str] = mapped_column(Text, default="[]")  # schema v3: [[week, units], ...]
+    calc: Mapped[str] = mapped_column(Text, default="{}")  # schema v4: every number behind the suggestion
 
 
 class Override(Base):
+    """One decision event. At most one event per (run, SKU) is current: not undone
+    (deleted_at) and not replaced by a newer decision (superseded_at)."""
     __tablename__ = "overrides"
     __table_args__ = (CheckConstraint("length(trim(reason)) > 0", name="override_reason_required"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -106,11 +110,13 @@ class Override(Base):
     decision: Mapped[str] = mapped_column(String(20))  # APPROVED | CHANGED
     recommended_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
     final_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    previous_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)  # v4: value before this decision
     reason: Mapped[str] = mapped_column(Text)
     username: Mapped[str] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)    # undone
     deleted_by: Mapped[str] = mapped_column(String(120), default="")
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # v4: replaced by a newer decision
 
 
 class EmailLog(Base):

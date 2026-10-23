@@ -20,10 +20,12 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 
 from src.app import charts
 from src.ingest.validate import reason_text
-from src.jobs.run_plan import STATUS_ORDER, next_scheduled_run, now_ist, run_plan, today_ist
+from src.app.status import plan_status
+from src.engine.sizing import is_material_change
+from src.jobs.run_plan import STATUS_ORDER, last_scheduled_run, next_scheduled_run, now_ist, run_plan, today_ist
 from src.jobs.weekly_summary import send_weekly_summary
 from src.outputs.judgment_log import judgment_log_markdown
-from src.outputs.workbook import build_workbook, read_override_sheet
+from src.outputs.workbook import build_workbook, read_import
 from src.rules_config import RulesConfig, rules_from_yaml
 from src.settings import settings
 from src.store.repo import Store
@@ -206,8 +208,17 @@ def rule_chips(r: dict, rules: RulesConfig) -> list[str]:
     elif cover is not None:
         chips.append(f"{cover} weeks of stock, within the {r['min_cover']:g} to {r['max_cover']:g}-week {window}range")
     if r.get("on_order"):
-        chips.append(f"Includes {r['on_order']:,.0f} units already on order")
+        chips.append(f"Includes {r['on_order']:,.0f} units on order that arrive before stock runs out")
+    excluded = (r.get("calc") or {}).get("on_order_excluded")
+    if excluded:
+        chips.append(f"{excluded:,.0f} units on order not counted (arrive too late or no delivery date)")
     return chips
+
+
+def urgency_key(r: dict):
+    """Within a group: least stock first (soonest to run out), except Pause (most excess first)."""
+    cover = r["cover_weeks"] if r["cover_weeks"] is not None else -1
+    return (-cover if r["status"] == "OVERSTOCK_RISK" else cover, r["sku_id"])
 
 
 def rules_summary(rules: RulesConfig) -> list[tuple[str, str]]:
@@ -224,8 +235,12 @@ def rules_summary(rules: RulesConfig) -> list[tuple[str, str]]:
                             f"+{pct(rules.festival.uplift)}% before every check"
                             + ("" if rules.festival.enabled else " (switched off)") + "."),
         ("Perishable SKUs", f"Tighter window: minimum {p.min_weeks:g}, maximum {p.max_weeks:g} weeks of stock."),
-        ("Stock counted", "Units on hand" + (" plus units already on order in Zoho"
+        ("Stock counted", "Units on hand" + ((" plus units on order in Zoho that arrive before stock on hand runs out"
+                                              if rules.open_orders.count_only_if_arrives_before_stockout
+                                              else " plus all units on order in Zoho")
                                              if rules.open_orders.include_in_cover else "") + "."),
+        ("When rules overlap", "Reorder now + Demand rising: order the larger, high-demand quantity. "
+                               "Pause + Demand rising: conflicting signals, so it goes to your judgment."),
         ("Needs your judgment", "New launches, big swings, zero-sales weeks, missing or old stock data, inactive "
                                 "distributors, or conflicting signals."),
     ]
@@ -239,19 +254,22 @@ def home(request: Request):
     store = get_store()
     run = store.latest_run()
     last_any = store.latest_run(status=None)
-    _, rules = store.current_rules()
+    # Show the rules this plan was made with, not whatever was saved since.
+    rules = store.rules_for_version(run["rules_version"]) if run else store.current_rules()[1]
     recs = _with_decisions(run) if run else []
     for r in recs:
         r["chips"] = rule_chips(r, rules)
-    groups = [{"status": s, "title": t, "color": c, "hint": h, "rows": [r for r in recs if r["status"] == s]}
+    groups = [{"status": s, "title": t, "color": c, "hint": h,
+               "rows": sorted((r for r in recs if r["status"] == s), key=urgency_key)}
               for s, t, c, h in ACTION_GROUPS]
     groups = [g for g in groups if g["rows"]]
     todo = recs  # every SKU needs a decision, including "no order needed"
-    decided = sum(1 for r in todo if r["decision"])
+    progress = store.decision_progress(run["id"]) if run else {"total": 0, "decided": 0, "pending": 0}
     pending_approvable = [r for r in todo if not r["decision"] and r["status"] != "EXCEPTION"]
     now = now_ist()
-    return page(request, "home.html", run=run, last_any=last_any, groups=groups, todo=todo, decided=decided,
-                pending_approvable=pending_approvable,
+    status = plan_status(run, recs, rules, now, last_scheduled_run(now)) if run else None
+    return page(request, "home.html", run=run, last_any=last_any, groups=groups, todo=todo,
+                decided=progress["decided"], pending_approvable=pending_approvable, plan=status,
                 rules_summary=rules_summary(rules), uplift_pct=round((rules.festival.uplift - 1) * 100),
                 now_ist=now, next_run=next_scheduled_run(now))
 
@@ -322,7 +340,7 @@ def sku_detail(request: Request, run_id: int, sku_id: str):
         return back("/recommendations", err=f"{sku_id} was not found in that run.")
     _, rules = store.current_rules()
     rec["reasons"] = [(c, reason_text(c, rules)) for c in rec["exception_codes"]]
-    history = [o for o in store.overrides(run_id) if o["sku_id"] == sku_id]
+    history = [o for o in store.overrides(run_id, include_deleted=True) if o["sku_id"] == sku_id]
     return page(request, "sku.html", run=store.get_run(run_id), r=rec, history=history,
                 short_weeks=rules.windows.short_weeks, long_weeks=rules.windows.long_weeks)
 
@@ -330,21 +348,38 @@ def sku_detail(request: Request, run_id: int, sku_id: str):
 @app.post("/sku/{run_id}/{sku_id}")
 def decide(request: Request, run_id: int, sku_id: str, decision: str = Form(...),
            final_qty: str = Form(""), reason: str = Form(""), who: str = Form(""), next: str = Form("")):
-    """A reason is optional. A blank one is logged as "Approved as recommended"
-    or "Quantity changed (no reason given)"."""
+    """Approvals and small changes need no reason (logged as "Approved as recommended"
+    or "Quantity changed (no reason given)"). A material change, more than
+    review.material_change_pct_of_standard of the standard order, needs one."""
+    store = get_store()
+    target = _safe_next(next, f"/sku/{run_id}/{sku_id}")
     qty = int(final_qty) if final_qty.strip().lstrip("-").isdigit() else None
-    if decision == "APPROVED" and not reason.strip():
-        reason = APPROVE_REASON
-    if decision == "CHANGED" and not reason.strip():
-        reason = CHANGE_REASON
     try:
         user = actor(request, who)
-        get_store().add_override(run_id, sku_id, decision, qty, reason, user)
+        reason = reason_or_default(store, run_id, sku_id, decision, qty, reason)
+        store.add_override(run_id, sku_id, decision, qty, reason, user)
     except ValueError as exc:
-        return back(_safe_next(next, f"/sku/{run_id}/{sku_id}"), err=f"{sku_id}: {exc}")
-    rec = get_store().recommendation(run_id, sku_id)
+        return back(target, err=f"{sku_id}: {exc}")
+    rec = store.recommendation(run_id, sku_id)
     default = "/" if rec["status"] == "EXCEPTION" else "/recommendations"
     return remember(back(_safe_next(next, default), msg=f"Saved your decision for {sku_id}."), user)
+
+
+def reason_or_default(store: Store, run_id: int, sku_id: str, decision: str, qty: int | None, reason: str) -> str:
+    """Return the reason to store, or raise if a material change has none."""
+    reason = (reason or "").strip()
+    if reason:
+        return reason
+    if decision == "APPROVED":
+        return APPROVE_REASON
+    rec = store.recommendation(run_id, sku_id)
+    run = store.get_run(run_id)
+    rules = store.rules_for_version(run["rules_version"] if run else None)
+    if rec and is_material_change(rec["recommended_qty"], qty, rec["standard_qty"], rules):
+        pct = rules.review.material_change_pct_of_standard
+        raise ValueError(f"Please add a reason: this changes the order by more than {pct:g}% of the "
+                         f"standard quantity ({rec['standard_qty']:,.0f}).")
+    return CHANGE_REASON
 
 
 @app.get("/analytics", response_class=HTMLResponse)
@@ -356,13 +391,14 @@ def analytics(request: Request, sku: str = ""):
     run = store.latest_run()
     if run is None:
         return page(request, "analytics.html", run=None)
-    _, rules = store.current_rules()
+    rules = store.rules_for_version(run["rules_version"])
     recs = _with_decisions(run)
+    progress = store.decision_progress(run["id"])
     todo = recs
     chosen = next((r for r in recs if r["sku_id"] == sku), None) or recs[0]
     tiles = [("SKUs in this plan", len(recs)), ("Need action (order or pause)",
                                                 sum(1 for r in recs if r["status"] != "OK")),
-             ("Decisions made", sum(1 for r in todo if r["decision"])),
+             ("Decisions made", f"{progress['decided']} of {progress['total']}"),
              ("Units already on order", f"{sum((r.get('on_order') or 0) for r in recs):,.0f}")]
     return page(request, "analytics.html", run=run, recs=recs, chosen=chosen, tiles=tiles,
                 stock_svg=charts.stock_overview(recs),
@@ -374,20 +410,29 @@ def analytics(request: Request, sku: str = ""):
 
 @app.get("/decisions", response_class=HTMLResponse)
 def decisions(request: Request):
+    """Current state for the latest plan (one row per SKU), then every decision event."""
     viewer(request)
-    return page(request, "decisions.html", rows=get_store().overrides(include_deleted=True)[:300])
+    store = get_store()
+    run = store.latest_run()
+    current = _with_decisions(run) if run else []
+    current.sort(key=lambda r: (r["decision"] is not None, r["sku_id"]))  # waiting first
+    progress = store.decision_progress(run["id"]) if run else None
+    return page(request, "decisions.html", run=run, current=current, progress=progress,
+                rows=store.overrides(include_deleted=True)[:500])
 
 
 @app.post("/decisions/{override_id}/delete")
 def delete_decision(request: Request, override_id: int, who: str = Form(""), next: str = Form("/decisions")):
     user = actor(request, who, required=False)
     ok = get_store().delete_override(override_id, user)
-    return back(_safe_next(next, "/decisions"), msg="Decision removed." if ok else "",
-                err="" if ok else "Nothing to remove.")
+    return back(_safe_next(next, "/decisions"),
+                msg="Undone. The SKU is waiting for a decision again; the history keeps the undone entry." if ok else "",
+                err="" if ok else "That decision was already undone or replaced by a later one.")
 
 
 @app.post("/decisions/upload")
 async def upload_decisions(request: Request, file: UploadFile = File(...), who: str = Form("")):
+    """Every row is checked first; if any row is wrong nothing is applied."""
     try:
         user = actor(request, who)
     except ValueError as exc:
@@ -397,17 +442,67 @@ async def upload_decisions(request: Request, file: UploadFile = File(...), who: 
     if run is None:
         return back("/decisions", err="There is no plan to attach these decisions to yet.")
     try:
-        rows = read_override_sheet(await file.read())
+        parsed = read_import(await file.read())
     except Exception as exc:  # noqa: BLE001 - any unreadable file
         return back("/decisions", err=f"Could not read that file: {exc}")
-    saved, problems = 0, []
-    for row in rows:
+    to_apply, errors, unchanged = validate_import(store, run, parsed)
+    if errors:
+        shown = "; ".join(errors[:8]) + (f"; and {len(errors) - 8} more" if len(errors) > 8 else "")
+        return back("/decisions", err=f"Nothing was imported. Fix these rows and upload again: {shown}")
+    for row in to_apply:
+        store.add_override(run["id"], row["sku_id"], row["decision"], row["final_qty"], row["reason"], user)
+    note = f" {unchanged} rows matched decisions already recorded and were skipped." if unchanged else ""
+    return remember(back("/decisions", msg=f"Imported {len(to_apply)} decisions.{note}"), user)
+
+
+def validate_import(store: Store, run: dict, parsed: dict) -> tuple[list[dict], list[str], int]:
+    """Check an uploaded sheet against the current plan. Returns (rows to apply, errors, unchanged)."""
+    errors, to_apply, seen, unchanged = [], [], set(), 0
+    if parsed["run_id"] not in (None, "") and str(parsed["run_id"]) != str(run["id"]):
+        return [], [f"this file is for plan #{parsed['run_id']}, but the current plan is #{run['id']}. "
+                    "Download the current Excel file and fill that in"], 0
+    recs = {r["sku_id"]: r for r in store.recommendations(run["id"])}
+    current = store.latest_decisions(run["id"])
+    rules = store.rules_for_version(run["rules_version"])
+    for r in parsed["rows"]:
+        where = f"row {r['row']} ({r['sku_id']})"
+        rec = recs.get(r["sku_id"])
+        word = r["decision"].lower()
+        if rec is None:
+            errors.append(f"{where}: SKU is not in this plan")
+            continue
+        if r["sku_id"] in seen:
+            errors.append(f"{where}: SKU appears more than once in the file")
+            continue
+        seen.add(r["sku_id"])
+        if word.startswith("approve"):
+            if rec["status"] == "EXCEPTION":
+                errors.append(f"{where}: needs a quantity, there is no suggestion to approve")
+                continue
+            decision, qty = "APPROVED", rec["recommended_qty"]
+        elif word.startswith("change"):
+            try:
+                qty = int(str(r["qty"]).strip())
+                if qty < 0 or float(str(r["qty"]).strip()) != qty:
+                    raise ValueError
+            except (TypeError, ValueError):
+                errors.append(f"{where}: Your_Qty must be a whole number of 0 or more")
+                continue
+            decision = "CHANGED"
+        else:
+            errors.append(f"{where}: Decision must be Approve or Change")
+            continue
         try:
-            store.add_override(run["id"], row["sku_id"], row["decision"], row["final_qty"], row["reason"], user)
-            saved += 1
+            reason = reason_or_default(store, run["id"], r["sku_id"], decision, qty, r["reason"])
         except ValueError as exc:
-            problems.append(f"{row['sku_id']}: {exc}")
-    return remember(back("/decisions", msg=f"Imported {saved} decisions.", err="; ".join(problems[:5])), user)
+            errors.append(f"{where}: {exc}")
+            continue
+        cur = current.get(r["sku_id"])
+        if cur and cur["decision"] == decision and cur["final_qty"] == qty:
+            unchanged += 1
+            continue
+        to_apply.append({"sku_id": r["sku_id"], "decision": decision, "final_qty": qty, "reason": reason})
+    return to_apply, errors, unchanged
 
 
 @app.get("/runs", response_class=HTMLResponse)
@@ -436,7 +531,7 @@ def workbook(request: Request, run_id: int):
     version = run["rules_version"] or 0
     rules = next((rules_from_yaml(v.yaml_text) for v in store.rules_history() if v.id == version),
                  store.current_rules()[1])
-    data = build_workbook(run, store.recommendations(run_id), store.overrides(run_id), rules, version)
+    data = build_workbook(run, store.recommendations(run_id), store.overrides(run_id, current_only=True), rules, version)
     name = f"freshroots_plan_{run['run_date']}_run{run_id}.xlsx"
     return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     headers={"Content-Disposition": f'attachment; filename="{name}"'})

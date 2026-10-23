@@ -10,20 +10,25 @@ from src.settings import ROOT
 
 def judgment_log_markdown(store) -> str:
     lines = ["# Judgment log", "",
-             "Every decision made on the review page, newest first. Generated automatically on each run.", ""]
-    overrides = store.overrides()
-    changed = [o for o in overrides if o["decision"] == "CHANGED"]
-    lines += [f"- Decisions recorded: {len(overrides)}", f"- Recommendations changed: {len(changed)}", ""]
-    if not overrides:
+             "Every decision event, newest first. Generated automatically on each run. State: current = the",
+             "decision in force for that plan; replaced = superseded by a later decision; undone = reversed.", ""]
+    events = store.overrides(include_deleted=True)
+    current = [o for o in events if o["state"] == "current"]
+    changed = [o for o in current if o["decision"] == "CHANGED"]
+    lines += [f"- Decision events: {len(events)} (current {len(current)})",
+              f"- Current decisions that changed the suggestion: {len(changed)}", ""]
+    if not events:
         lines.append("_No decisions recorded yet._")
     else:
-        lines += ["| When (UTC) | Run | SKU | Decision | Recommended | Final | Reason | By |",
-                  "|---|---|---|---|---|---|---|---|"]
-        for o in overrides:
+        lines += ["| When (UTC) | Plan | SKU | Decision | Suggested | Before | Final | Reason | By | State |",
+                  "|---|---|---|---|---|---|---|---|---|---|"]
+        dash = lambda v: "—" if v is None else v
+        for o in events:
             reason = o["reason"].replace("|", "/").replace("\n", " ")
-            lines.append(f"| {o['created_at']:%Y-%m-%d %H:%M} | {o['run_id']} | {o['sku_id']} | {o['decision']} | "
-                         f"{'—' if o['recommended_qty'] is None else o['recommended_qty']} | "
-                         f"{'—' if o['final_qty'] is None else o['final_qty']} | {reason} | {o['username']} |")
+            state = o["state"] + (f" by {o['deleted_by']}" if o["state"] == "undone" else "")
+            lines.append(f"| {o['created_at']:%Y-%m-%d %H:%M} | #{o['run_id']} | {o['sku_id']} | {o['decision']} | "
+                         f"{dash(o['recommended_qty'])} | {dash(o.get('previous_qty'))} | {dash(o['final_qty'])} | "
+                         f"{reason} | {o['username']} | {state} |")
     return "\n".join(lines) + "\n"
 
 

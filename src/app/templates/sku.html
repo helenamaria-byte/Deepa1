@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import status_badge, qty, who_field %}
+{% from "_macros.html" import status_badge, qty, who_field, calc_details %}
 {% block content %}
 <p><a href="/#{{ r.sku_id }}">← Back to today's decisions</a></p>
 <h1>{{ r.sku_id }} · {{ r.sku_name }}</h1>
@@ -31,6 +31,7 @@
     <h2 style="margin-top:0">Why</h2>
     <p>{{ r.explanation }}</p>
     {% for code, text in r.reasons %}<div><span class="badge purple">{{ code }}</span> {{ text }}</div>{% endfor %}
+    {{ calc_details(r, open=True) }}
     <h2>The numbers</h2>
     <div class="kv">
       <div>Stock on hand</div><div>{{ qty(r.on_hand|int if r.on_hand is not none else none) }} units{% if r.inventory_as_of %} <span class="muted">(as of {{ r.inventory_as_of }})</span>{% endif %}</div>

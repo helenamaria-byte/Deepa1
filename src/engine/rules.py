@@ -14,9 +14,12 @@ def compute_flags(features: pd.DataFrame, rules: RulesConfig) -> pd.Series:
     out and is not applied here.
     Rules 2/3: cover below the min / above the max of the SKU's cover window.
     Rule 5: perishable SKUs use the perishable window (chosen in features.py)."""
-    high = features["avg4"] > rules.high_demand.ratio * features["avg12"]
-    stockout = features["cover_weeks"] < features["min_cover"]
-    overstock = features["cover_weeks"] > features["max_cover"]
+    # Compare at 6 decimals so a value exactly on a threshold is not flagged by float noise
+    # (e.g. 1.2 x 83.333... must equal 100, not 99.99999999).
+    exact = lambda s: s.astype(float).round(6)
+    high = exact(features["avg4"]) > exact(rules.high_demand.ratio * features["avg12"])
+    stockout = exact(features["cover_weeks"]) < features["min_cover"]
+    overstock = exact(features["cover_weeks"]) > features["max_cover"]
 
     def row_flags(sku):
         flags = []
