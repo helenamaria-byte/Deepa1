@@ -11,9 +11,11 @@ from src.engine.exceptions import compute_exception_codes
 from src.engine.features import build_features
 from src.engine.rules import compute_flags
 from src.engine.sizing import ACTIONS, size
-from src.engine.weeks import week_label
+from src.engine.weeks import week_label, window
 from src.ingest.validate import validate
 from src.rules_config import RulesConfig
+
+HISTORY_WEEKS = 16  # weeks of sales kept per SKU for the dashboard chart
 
 
 @dataclass
@@ -37,6 +39,12 @@ def run_engine(raw: dict[str, pd.DataFrame], run_date: date, rules: RulesConfig)
     feats = build_features(clean, rules)
     flags = compute_flags(feats, rules)
     codes = compute_exception_codes(feats, flags, clean, rules)
+
+    # Weekly sales behind each decision, for the dashboard chart (display only, not a rule).
+    hist_w = window(clean.anchor, HISTORY_WEEKS)
+    hist = (clean.sales[clean.sales["week_start"] >= hist_w[0]]
+            .pivot_table(index="SKU_ID", columns="week_start", values="Units_Sold", aggfunc="sum")
+            .reindex(columns=hist_w)) if len(clean.sales) else pd.DataFrame(columns=hist_w)
 
     rows = []
     decimals = rules.rounding.cover_decimals
@@ -66,6 +74,8 @@ def run_engine(raw: dict[str, pd.DataFrame], run_date: date, rules: RulesConfig)
             "status": status,
             "action": ACTIONS[status],
             "recommended_qty": qty,
+            "sales_history": [[week_label(w), None if sku not in hist.index or pd.isna(hist.at[sku, w])
+                               else int(hist.at[sku, w])] for w in hist_w],
         })
     recs = pd.DataFrame(rows)
     if len(recs):  # keep quantities as Python ints / None, not floats / NaN

@@ -35,7 +35,8 @@
     <div class="kv">
       <div>Stock on hand</div><div>{{ qty(r.on_hand|int if r.on_hand is not none else none) }} units{% if r.inventory_as_of %} <span class="muted">(as of {{ r.inventory_as_of }})</span>{% endif %}</div>
       <div>Already on order</div><div>{{ qty((r.on_order or 0)|int) }} units <span class="muted">(open purchase orders in Zoho)</span></div>
-      <div>Weeks of stock</div><div>{{ r.cover_weeks if r.cover_weeks is not none else '—' }} <span class="muted">(target {{ r.min_cover|int }}–{{ r.max_cover|int }})</span></div>
+      <div>Weeks of stock</div><div>{{ r.cover_weeks if r.cover_weeks is not none else '—' }} <span class="muted">(target {{ r.min_cover|int }}–{{ r.max_cover|int }})</span>
+        {% if r.cover_weeks is not none %}<div style="max-width:240px;margin-top:4px">{{ cover_gauge(r) }}</div>{% endif %}</div>
       <div>Avg sales, last 4 weeks</div><div>{{ r.avg4 if r.avg4 is not none else '—' }}</div>
       <div>Avg sales, last 12 weeks</div><div>{{ r.avg12 if r.avg12 is not none else '—' }}</div>
       <div>Weekly demand used</div><div>{{ r.weekly_demand if r.weekly_demand is not none else '—' }}{% if run.festival %} <span class="muted">(includes festival uplift)</span>{% endif %}</div>
@@ -44,6 +45,54 @@
     </div>
   </div>
 </div>
+
+{% set chart = sales_chart(r.sales_history, r.avg4, r.avg12, short_weeks, long_weeks) %}
+{% if chart %}
+<div class="card" style="margin-top:18px">
+  <h2 style="margin-top:0">Weekly units sold</h2>
+  <div class="chart-key">
+    <span><i style="background:{{ CHART.SERIES }}"></i>Units sold each week</span>
+    <span><i style="background:{{ CHART.AVG_SHORT }}"></i>Average of the last {{ short_weeks }} weeks</span>
+    <span><i style="background:{{ CHART.AVG_LONG }}"></i>Average of the last {{ long_weeks }} weeks</span>
+  </div>
+  <div class="chart-box">{{ chart }}<div class="tip" hidden></div></div>
+  <p class="muted" style="margin:6px 0 0">The suggestion compares the two averages; weeks of stock use the
+    {{ long_weeks }}-week average{% if run.festival %} plus the festival uplift{% endif %}.</p>
+  <details style="margin-top:10px"><summary>Show as a table</summary>
+    <div class="tablewrap" style="margin-top:8px"><table>
+      <tr><th>Week</th><th>Units sold</th></tr>
+      {% for w, u in r.sales_history %}<tr><td>{{ w }}</td><td>{{ '—' if u is none else '{:,}'.format(u) }}</td></tr>{% endfor %}
+    </table></div>
+  </details>
+</div>
+<style>
+  .chart-key { display:flex; flex-wrap:wrap; gap:6px 18px; font-size:13px; color:var(--muted); margin-bottom:6px; }
+  .chart-key i { display:inline-block; width:14px; height:3px; border-radius:2px; vertical-align:middle; margin-right:6px; }
+  .chart-box { position:relative; }
+  .chart-box .tip { position:absolute; pointer-events:none; background:#1c2a20; color:#fff; font-size:12px;
+                    padding:4px 8px; border-radius:6px; white-space:nowrap; transform:translate(-50%, -130%); }
+</style>
+<script>
+  (function () {
+    const box = document.querySelector('.chart-box'); if (!box) return;
+    const svg = box.querySelector('svg'), tip = box.querySelector('.tip');
+    const xh = svg.querySelector('.xh'), hd = svg.querySelector('.hd');
+    const show = (rect) => {
+      const x = rect.dataset.x, y = rect.dataset.y;
+      xh.setAttribute('x1', x); xh.setAttribute('x2', x); xh.setAttribute('visibility', 'visible');
+      hd.setAttribute('cx', x); hd.setAttribute('cy', y); hd.setAttribute('visibility', 'visible');
+      const s = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+      tip.style.left = (x * s) + 'px'; tip.style.top = (y * s) + 'px';
+      tip.textContent = rect.dataset.tip; tip.hidden = false;
+    };
+    svg.querySelectorAll('rect[data-tip]').forEach(r => {
+      r.addEventListener('mouseenter', () => show(r));
+      r.addEventListener('touchstart', () => show(r), {passive: true});
+    });
+    svg.addEventListener('mouseleave', () => { tip.hidden = true; xh.setAttribute('visibility', 'hidden'); hd.setAttribute('visibility', 'hidden'); });
+  })();
+</script>
+{% endif %}
 
 {% if history %}
 <h2>Earlier decisions for this SKU</h2>

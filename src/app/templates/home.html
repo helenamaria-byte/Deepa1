@@ -29,7 +29,10 @@
   details.change summary::-webkit-details-marker { display:none; }
   details.change[open] summary { margin-bottom:8px; }
   details.change form { display:grid; gap:8px; }
-  .why-txt { font-size:13px; color:var(--muted); margin-top:6px; }
+  .why-txt { font-size:13px; color:var(--muted); margin-top:6px; display:inline-block; }
+  .gauge-wrap { margin-top:10px; max-width:240px; }
+  .gauge-key { font-size:11px; color:var(--muted); display:flex; flex-wrap:wrap; gap:4px 10px; align-items:center; }
+  .gauge-key .sw { width:10px; height:10px; border-radius:2px; display:inline-block; margin-right:-6px; }
   .rules li { margin-bottom:6px; }
   @media (max-width: 760px) { .item { grid-template-columns: 1fr; } }
 </style>
@@ -84,7 +87,14 @@
       <b>{{ r.sku_id }}</b> · {{ r.sku_name }}
       <div class="muted">{{ r.distributor_name }}{% if r.category %} · {{ r.category }}{% endif %}{% if r.perishable %} · <b>perishable</b>{% endif %}</div>
       <div class="chips">{% for c in r.chips %}<span class="chip">{{ c }}</span>{% endfor %}</div>
-      <a class="why-txt" href="/sku/{{ run.id }}/{{ r.sku_id }}">Details</a>
+      {% if r.cover_weeks is not none %}
+      <div class="gauge-wrap">{{ cover_gauge(r) }}
+        <div class="gauge-key"><span class="sw" style="background:{{ CHART.SERIES }}"></span>Weeks of stock
+          {% if r.on_order %}<span class="sw" style="background:{{ CHART.SERIES_LIGHT }}"></span>of which on order{% endif %}
+          <span class="sw" style="background:{{ CHART.BAND }}"></span>Target range</div>
+      </div>
+      {% endif %}
+      <a class="why-txt" href="/sku/{{ run.id }}/{{ r.sku_id }}">Details and sales chart</a>
     </div>
 
     <div class="sugg">

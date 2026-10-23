@@ -19,6 +19,8 @@ from src.store.models import (SCHEMA_VERSION, AiCacheEntry, Base, EmailLog, Over
                               RulesVersion, Run, SchemaInfo, User, utcnow)
 
 PBKDF2_ROUNDS = 200_000
+COLUMN_MIGRATIONS = [("on_order", "FLOAT DEFAULT 0"),        # schema v2
+                     ("sales_history", "TEXT DEFAULT '[]'")]  # schema v3
 
 
 @lru_cache(maxsize=8)
@@ -48,6 +50,7 @@ def _rec_to_dict(r: Recommendation) -> dict:
     d = {c.name: getattr(r, c.name) for c in Recommendation.__table__.columns}
     d["flags"] = json.loads(r.flags)
     d["exception_codes"] = json.loads(r.exception_codes)
+    d["sales_history"] = json.loads(r.sales_history or "[]")
     return d
 
 
@@ -68,11 +71,12 @@ class Store:
         """Create tables (idempotent), apply column migrations, record the schema
         version and seed rules v1."""
         Base.metadata.create_all(self.engine)
-        # v2: add recommendations.on_order to databases created before it existed.
+        # Add columns to databases created before they existed.
         columns = {c["name"] for c in inspect(self.engine).get_columns("recommendations")}
-        if "on_order" not in columns:
-            with self.engine.begin() as conn:
-                conn.execute(text("ALTER TABLE recommendations ADD COLUMN on_order FLOAT DEFAULT 0"))
+        for name, ddl in COLUMN_MIGRATIONS:
+            if name not in columns:
+                with self.engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE recommendations ADD COLUMN {name} {ddl}"))
         with self.Session.begin() as s:
             current = s.scalar(select(func.max(SchemaInfo.version)))
             if current is None or current < SCHEMA_VERSION:
@@ -126,6 +130,7 @@ class Store:
                 data = {k: v for k, v in row.items() if k in cols}
                 data["flags"] = json.dumps(list(row.get("flags", [])))
                 data["exception_codes"] = json.dumps(list(row.get("exception_codes", [])))
+                data["sales_history"] = json.dumps(row.get("sales_history", []))
                 s.add(Recommendation(run_id=run_id, **data))
 
     def get_run(self, run_id: int) -> dict | None:

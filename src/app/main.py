@@ -18,6 +18,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse,
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
+from src.app import charts
 from src.ingest.validate import reason_text
 from src.jobs.run_plan import STATUS_ORDER, run_plan, today_ist
 from src.jobs.weekly_summary import send_weekly_summary
@@ -41,7 +42,9 @@ STATUS_LABELS = {
     "EXCEPTION": ("Needs judgment", "purple"),
     "OK": ("OK", "green"),
 }
-templates.env.globals.update(STATUS_LABELS=STATUS_LABELS, STATUS_ORDER=STATUS_ORDER)
+templates.env.globals.update(STATUS_LABELS=STATUS_LABELS, STATUS_ORDER=STATUS_ORDER,
+                             cover_gauge=charts.cover_gauge, sales_chart=charts.sales_chart,
+                             CHART=charts)
 
 
 @lru_cache(maxsize=1)
@@ -322,7 +325,8 @@ def sku_detail(request: Request, run_id: int, sku_id: str):
     _, rules = store.current_rules()
     rec["reasons"] = [(c, reason_text(c, rules)) for c in rec["exception_codes"]]
     history = [o for o in store.overrides(run_id) if o["sku_id"] == sku_id]
-    return page(request, "sku.html", run=store.get_run(run_id), r=rec, history=history)
+    return page(request, "sku.html", run=store.get_run(run_id), r=rec, history=history,
+                short_weeks=rules.windows.short_weeks, long_weeks=rules.windows.long_weeks)
 
 
 @app.post("/sku/{run_id}/{sku_id}")
