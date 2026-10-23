@@ -1,40 +1,163 @@
 {% extends "base.html" %}
-{% from "_macros.html" import run_line %}
+{% from "_macros.html" import run_line, qty %}
 {% block content %}
-<h1>{{ 'Hello ' ~ user if user else 'Stock plan' }}</h1>
+<style>
+  .top { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end; justify-content:space-between; margin-bottom:18px; }
+  .progress { min-width:240px; }
+  .bar-outer { height:10px; background:#e4e9e2; border-radius:999px; overflow:hidden; margin-top:6px; }
+  .bar-inner { height:100%; background:var(--brand); }
+  .group { margin-top:26px; }
+  .group h2 { margin:0 0 2px; display:flex; align-items:center; gap:10px; }
+  .group .hint { color:var(--muted); margin:0 0 10px; font-size:14px; }
+  .dot { width:12px; height:12px; border-radius:50%; display:inline-block; }
+  .dot.red { background:var(--red); } .dot.blue { background:var(--blue); }
+  .dot.amber { background:var(--amber); } .dot.purple { background:var(--purple); }
+  .item { display:grid; grid-template-columns: minmax(220px, 2fr) 150px minmax(240px, 1.6fr); gap:16px;
+          background:var(--card); border:1px solid var(--line); border-left-width:5px; border-radius:10px;
+          padding:14px 16px; margin-bottom:10px; align-items:start; }
+  .item.red { border-left-color:var(--red); } .item.blue { border-left-color:var(--blue); }
+  .item.amber { border-left-color:var(--amber); } .item.purple { border-left-color:var(--purple); }
+  .item.done { opacity:.75; background:#fafbf9; }
+  .chips { margin-top:6px; display:flex; flex-direction:column; gap:3px; }
+  .chip { font-size:13px; color:#33433a; }
+  .chip::before { content:"• "; color:var(--muted); }
+  .sugg { font-size:13px; color:var(--muted); }
+  .sugg b { display:block; font-size:24px; color:var(--ink); line-height:1.2; }
+  .acts { display:flex; flex-direction:column; gap:8px; }
+  .acts form.inline { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:0; }
+  details.change summary { list-style:none; display:inline-block; cursor:pointer; color:var(--brand); font-weight:600; font-size:14px; }
+  details.change summary::-webkit-details-marker { display:none; }
+  details.change[open] summary { margin-bottom:8px; }
+  details.change form { display:grid; gap:8px; }
+  .why-txt { font-size:13px; color:var(--muted); margin-top:6px; }
+  .rules li { margin-bottom:6px; }
+  @media (max-width: 760px) { .item { grid-template-columns: 1fr; } }
+</style>
+
 {% if not run %}
+  <h1>Stock plan</h1>
   <p class="sub">No plan has been made yet.</p>
   <form method="post" action="/runs/new"><button class="btn">Make a plan now</button></form>
 {% else %}
-  <p class="sub">{{ run_line(run, uplift_pct) }}</p>
-  {% if last_any and last_any.status == 'FAILED' and last_any.id != run.id %}
-    <div class="err">The latest run (#{{ last_any.id }}) failed. You are seeing the last good plan. <a href="/runs">See details</a></div>
-  {% endif %}
-  {% for w in run.warnings %}<div class="warn">⚠ {{ w }}</div>{% endfor %}
 
-  <div class="card" style="margin-bottom:18px">
-    {% if todo|length == 0 %}
-      <h2 style="margin-top:0">All {{ run.counts.TOTAL }} SKUs are fine. Nothing to do.</h2>
-    {% elif decided == todo|length %}
-      <h2 style="margin-top:0">✓ All {{ todo|length }} SKUs are reviewed.</h2>
-      <p class="muted">The decisions are saved on the Decisions page.</p>
-    {% else %}
-      <h2 style="margin-top:0">{{ todo|length - decided }} of {{ todo|length }} SKUs are waiting for your review</h2>
-      <p class="muted">Check each suggestion, then approve it or change the quantity.</p>
+<div class="top">
+  <div>
+    <h1>{{ 'Hello ' ~ user ~ ', here' if user else 'Here' }} is what needs your decision</h1>
+    <p class="sub" style="margin:0">{{ run_line(run, uplift_pct) }}</p>
+  </div>
+  <div class="progress">
+    {% if todo %}
+      <b>{{ decided }} of {{ todo|length }} decided</b>
+      <div class="bar-outer"><div class="bar-inner" style="width:{{ (100 * decided / todo|length)|round|int }}%"></div></div>
     {% endif %}
-    <div class="actions" style="margin-bottom:0">
-      {% if decided < todo|length %}<a class="btn" href="/recommendations?show=todo">Start review →</a>{% endif %}
-      <a class="btn light" href="/runs/{{ run.id }}/workbook">Download Excel</a>
+    <div class="actions" style="margin:10px 0 0"><a class="btn light small" href="/runs/{{ run.id }}/workbook">Download Excel</a></div>
+  </div>
+</div>
+
+{% if last_any and last_any.status == 'FAILED' and last_any.id != run.id %}
+  <div class="err">The latest run (#{{ last_any.id }}) failed. You are seeing the last good plan. <a href="/runs">See details</a></div>
+{% endif %}
+{% for w in run.warnings %}<div class="warn">⚠ {{ w }}</div>{% endfor %}
+
+{% if not user and not auth_required %}
+<form method="post" action="/me" class="card" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:8px">
+  <div style="flex:1;min-width:200px"><label for="who">Who is reviewing? Your name goes in the decision log.</label>
+    <input id="who" type="text" name="who" required maxlength="60" placeholder="e.g. Raghav" autocomplete="name"></div>
+  <button class="btn">Start</button>
+</form>
+{% endif %}
+
+{% if not todo %}
+  <div class="card"><h2 style="margin:0">✓ Nothing needs a decision today. All {{ run.counts.TOTAL }} SKUs are within their stock range.</h2></div>
+{% elif decided == todo|length %}
+  <div class="msg"><b>✓ All {{ todo|length }} decisions are done.</b> They are saved on the Decisions page and in the Excel file.</div>
+{% endif %}
+
+{% for g in groups %}
+<section class="group">
+  <h2><span class="dot {{ g.color }}"></span>{{ g.title }} <span class="badge grey">{{ g.rows|length }}</span></h2>
+  <p class="hint">{{ g.hint }}</p>
+  {% for r in g.rows %}
+  {% set d = r.decision %}
+  <div class="item {{ g.color }} {{ 'done' if d }}" id="{{ r.sku_id }}">
+    <div>
+      <b>{{ r.sku_id }}</b> · {{ r.sku_name }}
+      <div class="muted">{{ r.distributor_name }}{% if r.category %} · {{ r.category }}{% endif %}{% if r.perishable %} · <b>perishable</b>{% endif %}</div>
+      <div class="chips">{% for c in r.chips %}<span class="chip">{{ c }}</span>{% endfor %}</div>
+      <a class="why-txt" href="/sku/{{ run.id }}/{{ r.sku_id }}">Details</a>
+    </div>
+
+    <div class="sugg">
+      {% if r.status == 'EXCEPTION' %}Suggested<b>You decide</b>
+      {% elif r.recommended_qty == 0 %}Suggested<b>Pause</b>no order this time
+      {% else %}Suggested order<b>{{ qty(r.recommended_qty) }}</b>units{% endif %}
+    </div>
+
+    <div class="acts">
+      {% if d %}
+        <div>{% if d.decision == 'APPROVED' %}<span class="badge green">✓ Approved{% if r.recommended_qty %} · {{ qty(d.final_qty) }} units{% endif %}</span>
+             {% else %}<span class="badge blue">Changed to {{ qty(d.final_qty) }} units</span>{% endif %}
+          <div class="muted">by {{ d.username }}{% if d.decision == 'CHANGED' %}: “{{ d.reason }}”{% endif %}</div></div>
+        <form method="post" action="/decisions/{{ d.id }}/delete" class="inline">
+          <input type="hidden" name="next" value="/#{{ r.sku_id }}">
+          <button class="btn small light">Undo</button></form>
+      {% else %}
+        {% if r.status != 'EXCEPTION' %}
+        <form method="post" action="/sku/{{ run.id }}/{{ r.sku_id }}" class="inline">
+          <input type="hidden" name="decision" value="APPROVED">
+          <input type="hidden" name="next" value="/#{{ r.sku_id }}">
+          <button class="btn">{{ 'Approve pause' if r.recommended_qty == 0 else 'Approve ' ~ qty(r.recommended_qty) }}</button>
+        </form>
+        {% endif %}
+        <details class="change" {{ 'open' if r.status == 'EXCEPTION' }}>
+          <summary>{{ 'Set the quantity' if r.status == 'EXCEPTION' else 'Change quantity…' }}</summary>
+          <form method="post" action="/sku/{{ run.id }}/{{ r.sku_id }}">
+            <input type="hidden" name="decision" value="CHANGED">
+            <input type="hidden" name="next" value="/#{{ r.sku_id }}">
+            <input type="number" name="final_qty" min="0" step="1" required placeholder="Units to order (0 = none)">
+            <input type="text" name="reason" required placeholder="Reason (required), e.g. promo next week">
+            <button class="btn small">Save</button>
+          </form>
+        </details>
+      {% endif %}
     </div>
   </div>
+  {% endfor %}
+</section>
+{% endfor %}
 
-  <div class="grid">
-    <a class="stat red" href="/recommendations?status=STOCKOUT_RISK"><b>{{ run.counts.STOCKOUT_RISK }}</b>Reorder now</a>
-    <a class="stat blue" href="/recommendations?status=HIGH_DEMAND"><b>{{ run.counts.HIGH_DEMAND }}</b>Demand rising</a>
-    <a class="stat amber" href="/recommendations?status=OVERSTOCK_RISK"><b>{{ run.counts.OVERSTOCK_RISK }}</b>Pause order</a>
-    <a class="stat purple" href="/exceptions"><b>{{ run.counts.EXCEPTION }}</b>Needs judgment</a>
-    <a class="stat green" href="/recommendations?status=OK"><b>{{ run.counts.OK }}</b>OK, no action</a>
-  </div>
-  <p class="muted" style="margin-top:18px">Plans are made automatically every Monday and Thursday at 6:00 am (India time).</p>
+{% if pending_approvable|length > 1 %}
+<form method="post" action="/recommendations/approve-all" class="card" style="margin-top:18px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+  <input type="hidden" name="run_id" value="{{ run.id }}"><input type="hidden" name="next" value="/">
+  <div style="flex:1;min-width:220px"><b>Agree with the rest?</b>
+    <div class="muted">Approves the {{ pending_approvable|length }} remaining suggestions above (not the ones that need your judgment).</div></div>
+  <button class="btn">Approve all {{ pending_approvable|length }}</button>
+</form>
+{% endif %}
+
+{% if ok_rows %}
+<details class="card" style="margin-top:26px">
+  <summary style="cursor:pointer"><b>{{ ok_rows|length }} SKUs are fine: no order needed</b> <span class="muted">(click to see them)</span></summary>
+  <div class="tablewrap" style="margin-top:12px;border:0"><table>
+    <tr><th>SKU</th><th>Weeks of stock</th><th>Why it's fine</th><th></th></tr>
+    {% for r in ok_rows %}
+    <tr><td><b>{{ r.sku_id }}</b><div class="muted">{{ r.sku_name }}</div></td>
+        <td>{{ r.cover_weeks }}</td>
+        <td class="why">{{ r.chips|join(' · ') }}</td>
+        <td>{% if r.decision and r.decision.decision == 'CHANGED' %}<span class="badge blue">Changed to {{ qty(r.decision.final_qty) }}</span>
+            {% elif r.decision %}<span class="badge green">✓ Confirmed, no order</span>
+            {% else %}<a href="/sku/{{ run.id }}/{{ r.sku_id }}">Order anyway…</a>{% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+</details>
+{% endif %}
+
+<details class="card" style="margin-top:14px">
+  <summary style="cursor:pointer"><b>How the flags are decided</b></summary>
+  <ul class="rules" style="margin:12px 0 0;padding-left:18px">
+    {% for title, text in rules_summary %}<li><b>{{ title }}:</b> {{ text }}</li>{% endfor %}
+  </ul>
+  <p class="muted" style="margin-bottom:0">Change these numbers on the <a href="/settings">Settings</a> page. Plans run every Monday and Thursday at 6:00 am (India time).</p>
+</details>
 {% endif %}
 {% endblock %}

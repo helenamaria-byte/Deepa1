@@ -45,7 +45,7 @@ def test_pages_open_without_login(open_client):
     for path in ["/", "/recommendations", "/exceptions", "/decisions", "/runs", "/settings", "/sku/1/SKU001"]:
         r = open_client.get(path, follow_redirects=False)
         assert r.status_code == 200, path
-    assert "Stock plan" in open_client.get("/").text
+    assert "Who is reviewing?" in open_client.get("/").text
     assert 'name="who"' in open_client.get("/sku/1/SKU001").text
 
 
@@ -76,7 +76,7 @@ def test_every_page_loads(client):
         r = client.get(path)
         assert r.status_code == 200, path
     home = client.get("/").text
-    assert "7 of 7 SKUs are waiting for your review" in home
+    assert "0 of 7 decided" in home and "Reorder now" in home
     rec = client.get("/recommendations?status=STOCKOUT_RISK").text
     assert "SKU001" in rec and "750" in rec and "SKU006" not in rec
 
@@ -98,7 +98,7 @@ def test_override_round_trip_and_delete(client):
 def test_approve_all(client):
     r = client.post("/recommendations/approve-all", data={"run_id": "1", "reason": "Reviewed with procurement"})
     assert "Approved 7 suggestions." in r.text
-    assert "All 7 SKUs are reviewed" in client.get("/").text
+    assert "All 7 decisions are done" in client.get("/").text
 
 
 def test_excel_download_and_upload(client):
@@ -144,3 +144,40 @@ def test_cron_requires_secret(client):
     assert TestClient(app).get("/api/cron/run", headers={"Authorization": "Bearer wrong"}).status_code == 401
     r = TestClient(app).get("/api/cron/weekly", headers={"Authorization": "Bearer test-cron"})
     assert r.status_code == 200 and r.json()["weekly_summary"] == "OUTBOX"
+
+
+def test_landing_page_is_raghavs_action_list(client):
+    home = client.get("/").text
+    # Sections in the order he acts on them; OK SKUs are folded away.
+    assert home.index("Reorder now") < home.index("Pause the next order") < home.index("SKUs are fine")
+    assert "8 SKUs are fine: no order needed" in home
+    assert "Approve 750" in home and "Approve pause" in home
+    # The rule behind each flag, in plain words with the SKU's own numbers.
+    assert "Sales +21% vs 12-week average (trigger: over +20%)" in home
+    assert "3.35 weeks of stock, below the 6-week minimum" in home
+    assert "4.08 weeks of stock, above the 4-week perishable maximum" in home
+    assert "How the flags are decided" in home and "Festival months" in home
+
+
+def test_one_click_approve_and_undo(client):
+    r = client.post("/sku/1/SKU001", data={"decision": "APPROVED", "next": "/#SKU001"})
+    assert "Saved your decision for SKU001" in r.text and "1 of 7 decided" in r.text
+    d = get_store().latest_decisions(1)["SKU001"]
+    assert d["final_qty"] == 750 and d["reason"] == "Approved as recommended"
+    oid = re.search(r'/decisions/(\d+)/delete" class="inline">\s*<input type="hidden" name="next" value="/#SKU001"',
+                    r.text).group(1)
+    r = client.post(f"/decisions/{oid}/delete", data={"next": "/#SKU001"})
+    assert "0 of 7 decided" in r.text
+
+
+def test_change_needs_a_reason(client):
+    r = client.post("/sku/1/SKU003", data={"decision": "CHANGED", "final_qty": "400", "next": "/"})
+    assert "Please give a reason for changing the quantity." in r.text
+    assert "SKU003" not in get_store().latest_decisions(1)
+    r = client.post("/sku/1/SKU003", data={"decision": "CHANGED", "final_qty": "400", "reason": "Promo", "next": "/"})
+    assert "Changed to 400 units" in r.text
+
+
+def test_approve_all_from_landing_page_needs_no_reason(client):
+    r = client.post("/recommendations/approve-all", data={"run_id": "1", "next": "/"})
+    assert "Approved 7 suggestions." in r.text and "All 7 decisions are done" in r.text

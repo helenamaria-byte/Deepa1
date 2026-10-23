@@ -54,8 +54,8 @@
   <h2 style="margin-top:0">Agree with all {{ pending|length }} remaining suggestions?</h2>
   <form method="post" action="/recommendations/approve-all">
     <input type="hidden" name="run_id" value="{{ run.id }}">
-    <label for="reason">Reason (required)</label>
-    <input id="reason" type="text" name="reason" required placeholder="e.g. Checked with procurement, quantities look right">
+    <label for="reason">Note (optional)</label>
+    <input id="reason" type="text" name="reason" placeholder="e.g. Checked with procurement, quantities look right">
     <div style="height:12px"></div>
     {{ who_field(user, auth_required) }}
     <button class="btn">Approve all {{ pending|length }}</button>

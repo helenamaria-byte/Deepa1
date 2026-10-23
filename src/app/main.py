@@ -123,8 +123,10 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
 
 
 def back(path: str, **params) -> RedirectResponse:
+    path, _, fragment = path.partition("#")
     query = urlencode({k: v for k, v in params.items() if v not in (None, "")})
-    return RedirectResponse(f"{path}?{query}" if query else path, status_code=303)
+    url = (f"{path}?{query}" if query else path) + (f"#{fragment}" if fragment else "")
+    return RedirectResponse(url, status_code=303)
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -167,19 +169,93 @@ def _with_decisions(run: dict) -> list[dict]:
     return recs
 
 
+def _safe_next(next_url: str, default: str) -> str:
+    return next_url if next_url.startswith("/") and not next_url.startswith("//") else default
+
+
+APPROVE_REASON = "Approved as recommended"
+
+# Landing-page sections, in the order Raghav should act on them.
+ACTION_GROUPS = [
+    ("STOCKOUT_RISK", "Reorder now", "red", "Stock will run out soon."),
+    ("HIGH_DEMAND", "Demand rising", "blue", "Sales are climbing, so order more than usual."),
+    ("OVERSTOCK_RISK", "Pause the next order", "amber", "There is too much stock, so skip the next order."),
+    ("EXCEPTION", "Needs your judgment", "purple", "No automatic suggestion. You decide the quantity."),
+]
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def rule_chips(r: dict, rules: RulesConfig) -> list[str]:
+    """The rule(s) behind a SKU's status, in plain words with its own numbers."""
+    if r["status"] == "EXCEPTION":
+        return [reason_text(c, rules) for c in r["exception_codes"]]
+    chips = []
+    if "HIGH_DEMAND" in r["flags"] and r["avg12"]:
+        chips.append(f"Sales +{round((r['avg4'] / r['avg12'] - 1) * 100)}% vs {rules.windows.long_weeks}-week "
+                     f"average (trigger: over +{round((rules.high_demand.ratio - 1) * 100)}%)")
+    cover, window = r["cover_weeks"], "perishable " if r["perishable"] else ""
+    if "STOCKOUT_RISK" in r["flags"]:
+        chips.append(f"{cover} weeks of stock, below the {r['min_cover']:g}-week {window}minimum")
+    elif "OVERSTOCK_RISK" in r["flags"]:
+        chips.append(f"{cover} weeks of stock, above the {r['max_cover']:g}-week {window}maximum")
+    elif cover is not None:
+        chips.append(f"{cover} weeks of stock, within the {r['min_cover']:g} to {r['max_cover']:g}-week {window}range")
+    if r.get("on_order"):
+        chips.append(f"Includes {r['on_order']:,.0f} units already on order")
+    return chips
+
+
+def rules_summary(rules: RulesConfig) -> list[tuple[str, str]]:
+    pct = lambda x: round((x - 1) * 100)
+    g, p = rules.cover.general, rules.cover.perishable
+    return [
+        ("Demand rising", f"Sales over the last {rules.windows.short_weeks} weeks are more than "
+                          f"{pct(rules.high_demand.ratio)}% above the {rules.windows.long_weeks}-week average. "
+                          f"Order {rules.high_demand.reorder_multiplier:g}× the standard quantity."),
+        ("Reorder now", f"Stock covers less than {g.min_weeks:g} weeks of average weekly sales. "
+                        "Order the standard quantity now."),
+        ("Pause the next order", f"Stock covers more than {g.max_weeks:g} weeks. Skip the next order."),
+        ("Festival months", f"{', '.join(MONTHS[m - 1] for m in rules.festival.fallback_months)}: demand "
+                            f"+{pct(rules.festival.uplift)}% before every check"
+                            + ("" if rules.festival.enabled else " (switched off)") + "."),
+        ("Perishable SKUs", f"Tighter window: minimum {p.min_weeks:g}, maximum {p.max_weeks:g} weeks of stock."),
+        ("Stock counted", "Units on hand" + (" plus units already on order in Zoho"
+                                             if rules.open_orders.include_in_cover else "") + "."),
+        ("Needs your judgment", "New launches, big swings, zero-sales weeks, missing or old stock data, inactive "
+                                "distributors, or conflicting signals."),
+    ]
+
+
 # ---- pages -----------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
+    """Raghav's landing page: what needs a decision today, grouped by action."""
     viewer(request)
     store = get_store()
     run = store.latest_run()
     last_any = store.latest_run(status=None)
+    _, rules = store.current_rules()
     recs = _with_decisions(run) if run else []
+    for r in recs:
+        r["chips"] = rule_chips(r, rules)
+    groups = [{"status": s, "title": t, "color": c, "hint": h, "rows": [r for r in recs if r["status"] == s]}
+              for s, t, c, h in ACTION_GROUPS]
+    groups = [g for g in groups if g["rows"]]
     todo = [r for r in recs if r["status"] != "OK"]
     decided = sum(1 for r in todo if r["decision"])
-    _, rules = store.current_rules()
-    return page(request, "home.html", run=run, last_any=last_any, todo=todo, decided=decided,
-                uplift_pct=round((rules.festival.uplift - 1) * 100))
+    pending_approvable = [r for r in todo if not r["decision"] and r["status"] != "EXCEPTION"]
+    return page(request, "home.html", run=run, last_any=last_any, groups=groups, todo=todo, decided=decided,
+                ok_rows=[r for r in recs if r["status"] == "OK"], pending_approvable=pending_approvable,
+                rules_summary=rules_summary(rules), uplift_pct=round((rules.festival.uplift - 1) * 100))
+
+
+@app.post("/me")
+def set_name(request: Request, who: str = Form(""), next: str = Form("/")):
+    try:
+        name = actor(request, who)
+    except ValueError as exc:
+        return back("/", err=str(exc))
+    return remember(RedirectResponse(_safe_next(next, "/"), status_code=303), name)
 
 
 @app.get("/review")
@@ -207,21 +283,21 @@ def recommendations(request: Request, run: int | None = None, status: str = "", 
 
 
 @app.post("/recommendations/approve-all")
-def approve_all(request: Request, run_id: int = Form(...), reason: str = Form(""), who: str = Form("")):
+def approve_all(request: Request, run_id: int = Form(...), reason: str = Form(""), who: str = Form(""),
+                next: str = Form("/recommendations")):
+    target = _safe_next(next, "/recommendations")
     try:
         user = actor(request, who)
     except ValueError as exc:
-        return back("/recommendations", show="todo", err=str(exc))
-    if not reason.strip():
-        return back("/recommendations", show="todo", err="Please write a short reason before approving.")
+        return back(target, err=str(exc))
     store = get_store()
     run = store.get_run(run_id)
     n = 0
     for r in _with_decisions(run):
         if r["status"] not in ("OK", "EXCEPTION") and not r["decision"]:
-            store.add_override(run_id, r["sku_id"], "APPROVED", None, reason, user)
+            store.add_override(run_id, r["sku_id"], "APPROVED", None, reason.strip() or APPROVE_REASON, user)
             n += 1
-    return remember(back("/recommendations", msg=f"Approved {n} suggestions."), user)
+    return remember(back(target, msg=f"Approved {n} suggestions."), user)
 
 
 @app.get("/exceptions", response_class=HTMLResponse)
@@ -251,16 +327,23 @@ def sku_detail(request: Request, run_id: int, sku_id: str):
 
 @app.post("/sku/{run_id}/{sku_id}")
 def decide(request: Request, run_id: int, sku_id: str, decision: str = Form(...),
-           final_qty: str = Form(""), reason: str = Form(""), who: str = Form("")):
+           final_qty: str = Form(""), reason: str = Form(""), who: str = Form(""), next: str = Form("")):
+    """Approve needs no typed reason (it is recorded as "Approved as recommended").
+    Changing a quantity always needs a reason."""
     qty = int(final_qty) if final_qty.strip().lstrip("-").isdigit() else None
+    if decision == "APPROVED" and not reason.strip():
+        reason = APPROVE_REASON
+    if decision == "CHANGED" and not reason.strip():
+        reason = ""  # add_override rejects it with a clear message
     try:
         user = actor(request, who)
         get_store().add_override(run_id, sku_id, decision, qty, reason, user)
     except ValueError as exc:
-        return back(f"/sku/{run_id}/{sku_id}", err=str(exc))
+        msg = "Please give a reason for changing the quantity." if "reason" in str(exc).lower() else str(exc)
+        return back(_safe_next(next, f"/sku/{run_id}/{sku_id}"), err=f"{sku_id}: {msg}")
     rec = get_store().recommendation(run_id, sku_id)
-    target = "/exceptions" if rec["status"] == "EXCEPTION" else "/recommendations"
-    return remember(back(target, msg=f"Saved your decision for {sku_id}."), user)
+    default = "/exceptions" if rec["status"] == "EXCEPTION" else "/recommendations"
+    return remember(back(_safe_next(next, default), msg=f"Saved your decision for {sku_id}."), user)
 
 
 @app.get("/decisions", response_class=HTMLResponse)
@@ -270,10 +353,11 @@ def decisions(request: Request):
 
 
 @app.post("/decisions/{override_id}/delete")
-def delete_decision(request: Request, override_id: int, who: str = Form("")):
+def delete_decision(request: Request, override_id: int, who: str = Form(""), next: str = Form("/decisions")):
     user = actor(request, who, required=False)
     ok = get_store().delete_override(override_id, user)
-    return back("/decisions", msg="Decision removed." if ok else "", err="" if ok else "Nothing to remove.")
+    return back(_safe_next(next, "/decisions"), msg="Decision removed." if ok else "",
+                err="" if ok else "Nothing to remove.")
 
 
 @app.post("/decisions/upload")
