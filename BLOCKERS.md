@@ -11,5 +11,5 @@ change away from the full version: set the value in Vercel's environment variabl
 | `EMAIL_FROM` | Blank | `onboarding@resend.dev` (Resend's test sender). |
 | `EMAIL_TO_RAGHAV`, `EMAIL_TO_PROCUREMENT`, `EMAIL_TO_DEEPA` | Blank | All three set to the Resend account owner's address, the only address the test sender can reach. |
 | `DATA_SOURCE_URL`, `DATA_SOURCE_CREDENTIALS` | Blank | The 5 CSVs in `data/`, read through `CsvFolderConnector`. **The sample inventory is dated 2026-10-19; from 2026-10-30 every SKU will be flagged STALE_INVENTORY, and sales will show as "behind" from 2026-10-26, until real SAP exports are connected.** |
-| `ZOHO_*` | Blank | `ZohoConnector` stub returns an empty open-PO table (`ZOHO_ENABLED=false`). Cover does not include stock on order. |
+| `ZOHO_*` | Supplied after the build | Resolved: connected to **Zoho Inventory** (organization `Freshroots`, India data centre). Open purchase orders are read before every plan and counted in weeks of stock. The organization holds demo data loaded by `python -m src.jobs.zoho_seed` (4 vendors, 15 items, 3 issued POs and 1 draft). |
 | `DASHBOARD_USERS` | Blank | Logins generated and emailed (DECISIONS #6). |

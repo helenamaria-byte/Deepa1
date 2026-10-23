@@ -43,11 +43,12 @@ def build_workbook(run: dict, recs: list[dict], overrides: list[dict], rules: Ru
 
     _sheet(wb, "Recommendations",
            ["SKU_ID", "SKU_Name", "Category", "Distributor", "Status", "Action", "Recommended_Qty",
-            "Cover_Weeks", "Min_Cover", "Max_Cover", "Units_On_Hand", "Avg_4wk", "Avg_12wk",
+            "Cover_Weeks", "Min_Cover", "Max_Cover", "Units_On_Hand", "Units_On_Order", "Avg_4wk", "Avg_12wk",
             "Weekly_Demand_Used", "Perishable", "Reason"],
            [[r["sku_id"], r["sku_name"], r["category"], r["distributor_name"], r["status"], r["action"],
              r["recommended_qty"], r["cover_weeks"], r["min_cover"], r["max_cover"], r["on_hand"],
-             r["avg4"], r["avg12"], r["weekly_demand"], "Yes" if r["perishable"] else "No", r["explanation"]]
+             r.get("on_order") or 0, r["avg4"], r["avg12"], r["weekly_demand"],
+             "Yes" if r["perishable"] else "No", r["explanation"]]
             for r in actionable])
 
     _sheet(wb, "Exceptions",
@@ -80,7 +81,8 @@ def build_workbook(run: dict, recs: list[dict], overrides: list[dict], rules: Ru
                                f"{rules.cover.perishable.max_weeks} weeks replaces rules 2 and 3"],
         ["Both stockout and high demand", "reorder the high-demand quantity"],
         ["Overstock and high demand", "conflict -> exception queue"],
-        ["Cover", "units on hand / weekly demand (avg of last 12 weeks, with festival uplift)"],
+        ["Cover", "(units on hand" + (" + units on open purchase orders" if rules.open_orders.include_in_cover
+                                       else "") + ") / weekly demand (avg of last 12 weeks, with festival uplift)"],
         *[[f"Exception: {code}", reason_text(code, rules)] for code in sorted(REASONS)],
     ])
 

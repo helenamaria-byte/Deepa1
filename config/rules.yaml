@@ -33,5 +33,8 @@ exceptions:               # SKUs that go to the review queue with no auto-recomm
   stale_inventory_days: 10    # inventory older than this -> STALE_INVENTORY
   active_status: Active       # distributor status other than this -> INACTIVE_DISTRIBUTOR
 
+open_orders:              # stock already on order (open purchase orders from Zoho Inventory)
+  include_in_cover: true  # cover = (units on hand + units on order) / weekly demand
+
 rounding:
   cover_decimals: 2

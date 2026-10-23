@@ -12,7 +12,7 @@ numbered version in the database; every run records which version it used.
 | avg4 | Mean weekly units sold over the last 4 complete weeks |
 | Festival run | The run date's month is marked `Is_Festival_Month = TRUE` in `calendar.csv` (Oct, Nov, Mar) |
 | Weekly demand | avg12 × 1.25 in a festival run, otherwise avg12 |
-| Cover (weeks) | Units on hand ÷ weekly demand. Stock across locations is summed |
+| Cover (weeks) | (Units on hand + units on open purchase orders in Zoho) ÷ weekly demand. Stock across locations is summed |
 | Perishable | `sku_master.Perishability = High` |
 
 If the newest sales week in the export is older than the last complete week (the SAP export is

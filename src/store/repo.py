@@ -8,7 +8,7 @@ import os
 from datetime import date
 from functools import lru_cache
 
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, func, inspect, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
@@ -65,10 +65,17 @@ class Store:
 
     # ---- schema ----------------------------------------------------------
     def migrate(self) -> None:
-        """Create tables (idempotent), record the schema version and seed rules v1."""
+        """Create tables (idempotent), apply column migrations, record the schema
+        version and seed rules v1."""
         Base.metadata.create_all(self.engine)
+        # v2: add recommendations.on_order to databases created before it existed.
+        columns = {c["name"] for c in inspect(self.engine).get_columns("recommendations")}
+        if "on_order" not in columns:
+            with self.engine.begin() as conn:
+                conn.execute(text("ALTER TABLE recommendations ADD COLUMN on_order FLOAT DEFAULT 0"))
         with self.Session.begin() as s:
-            if not s.scalar(select(func.count()).select_from(SchemaInfo)):
+            current = s.scalar(select(func.max(SchemaInfo.version)))
+            if current is None or current < SCHEMA_VERSION:
                 s.add(SchemaInfo(version=SCHEMA_VERSION))
             if not s.scalar(select(func.count()).select_from(RulesVersion)):
                 s.add(RulesVersion(id=1, yaml_text=default_rules_yaml(), created_by="system",

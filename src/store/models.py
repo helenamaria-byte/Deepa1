@@ -10,7 +10,7 @@ from sqlalchemy import (Boolean, CheckConstraint, Date, DateTime, Float, Foreign
                         String, Text, UniqueConstraint)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # v2: recommendations.on_order (open purchase orders from Zoho)
 
 
 def utcnow() -> datetime:
@@ -78,6 +78,7 @@ class Recommendation(Base):
     perishable: Mapped[bool] = mapped_column(Boolean, default=False)
     standard_qty: Mapped[float | None] = mapped_column(Float, nullable=True)
     on_hand: Mapped[float | None] = mapped_column(Float, nullable=True)
+    on_order: Mapped[float | None] = mapped_column(Float, nullable=True, default=0.0)  # schema v2
     inventory_as_of: Mapped[date | None] = mapped_column(Date, nullable=True)
     history_weeks: Mapped[int] = mapped_column(Integer, default=0)
     avg4: Mapped[float | None] = mapped_column(Float, nullable=True)

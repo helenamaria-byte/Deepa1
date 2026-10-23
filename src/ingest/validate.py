@@ -67,6 +67,7 @@ class CleanData:
     calendar: pd.DataFrame
     run_date: date
     anchor: date                   # Monday of the last complete week used
+    on_order: pd.Series = field(default_factory=lambda: pd.Series(dtype=float))  # SKU_ID -> units on open POs
     issues: dict[str, set[str]] = field(default_factory=dict)  # SKU_ID -> reason codes
     warnings: list[str] = field(default_factory=list)
 
@@ -185,5 +186,17 @@ def validate(raw: dict[str, pd.DataFrame], run_date: date, rules: RulesConfig) -
     cal = tables["calendar"].copy()
     cal["Is_Festival_Month"] = _to_bool(cal["Is_Festival_Month"])
 
+    # --- Open purchase orders (optional, from Zoho) -----------------------
+    on_order = pd.Series(dtype=float)
+    pos = raw.get("open_purchase_orders")
+    if pos is not None and len(pos):
+        pos = pos.copy()
+        pos["Units_On_Order"] = pd.to_numeric(pos["Units_On_Order"], errors="coerce")
+        pos = pos[pos["Units_On_Order"] > 0]
+        unknown = sorted(set(pos["SKU_ID"]) - master_skus)
+        if unknown:
+            warnings.append(f"Purchase orders for SKUs not in the SKU master were ignored: {', '.join(unknown)}")
+        on_order = pos[pos["SKU_ID"].isin(master_skus)].groupby("SKU_ID")["Units_On_Order"].sum()
+
     return CleanData(sales=sales, inventory=inv, master=master, distributors=dist, calendar=cal,
-                     run_date=run_date, anchor=anchor, issues=issues, warnings=warnings)
+                     run_date=run_date, anchor=anchor, on_order=on_order, issues=issues, warnings=warnings)

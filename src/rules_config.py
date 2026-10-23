@@ -57,6 +57,10 @@ class Rounding(BaseModel):
     cover_decimals: int = Field(ge=0)
 
 
+class OpenOrders(BaseModel):
+    include_in_cover: bool = True
+
+
 class RulesConfig(BaseModel):
     windows: Windows
     festival: Festival
@@ -64,6 +68,7 @@ class RulesConfig(BaseModel):
     cover: Cover
     exceptions: Exceptions
     rounding: Rounding
+    open_orders: OpenOrders = Field(default_factory=OpenOrders)  # older rule versions predate this
 
     def to_yaml(self) -> str:
         return yaml.safe_dump(self.model_dump(), sort_keys=False)

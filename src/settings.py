@@ -85,6 +85,11 @@ class Settings:
     data_source_url = property(lambda self: _env("DATA_SOURCE_URL"))
     data_source_credentials = property(lambda self: _env("DATA_SOURCE_CREDENTIALS"))
     zoho_enabled = property(lambda self: _env("ZOHO_ENABLED", "false").lower() == "true")
+    zoho_client_id = property(lambda self: _env("ZOHO_CLIENT_ID"))
+    zoho_client_secret = property(lambda self: _env("ZOHO_CLIENT_SECRET"))
+    zoho_refresh_token = property(lambda self: _env("ZOHO_REFRESH_TOKEN"))
+    zoho_org_id = property(lambda self: _env("ZOHO_ORG_ID"))
+    zoho_dc = property(lambda self: _env("ZOHO_DC", "in"))
 
     @property
     def outbox_dir(self) -> Path:

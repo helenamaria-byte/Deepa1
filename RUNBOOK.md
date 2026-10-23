@@ -30,6 +30,7 @@ For the IT team. Day-to-day use of the dashboard needs none of this.
 | Everything is in Exceptions with STALE_INVENTORY | The inventory export is more than 10 days old. Same as above. |
 | Change a threshold | Dashboard → Settings. Saved as a new version; used from the next run. |
 | Connect real SAP exports | Set `DATA_SOURCE_URL` (`https://...`, `s3://bucket/prefix`, `sftp://user@host/folder`, or `file:///path`) and `DATA_SOURCE_CREDENTIALS`. The folder must contain the 5 files with the same names and columns. For S3/SFTP add `boto3` / `paramiko` to `requirements.txt`. |
+| Zoho (stock on order) | Settings `ZOHO_ENABLED=true`, `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`, `ZOHO_ORG_ID`, `ZOHO_DC=in`. Check with `python -c "from src.connectors.zoho import ZohoConnector; print(ZohoConnector().fetch_open_pos())"`. Reload demo data with `python -m src.jobs.zoho_seed`. If Zoho is down the plan runs without it and shows a warning. |
 | Turn on Claude explanations | Set `ANTHROPIC_API_KEY`. Replies are validated; any failure falls back to templates. |
 | Send email from a company address | Verify the domain in Resend, then set `EMAIL_FROM` and the `EMAIL_TO_*` addresses. |
 | Require logins again | Set `AUTH_REQUIRED=true` in Vercel and redeploy. The login page and the raghav/procurement/deepa accounts come back. |

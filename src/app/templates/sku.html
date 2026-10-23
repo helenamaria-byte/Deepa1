@@ -33,6 +33,7 @@
     <h2>The numbers</h2>
     <div class="kv">
       <div>Stock on hand</div><div>{{ qty(r.on_hand|int if r.on_hand is not none else none) }} units{% if r.inventory_as_of %} <span class="muted">(as of {{ r.inventory_as_of }})</span>{% endif %}</div>
+      <div>Already on order</div><div>{{ qty((r.on_order or 0)|int) }} units <span class="muted">(open purchase orders in Zoho)</span></div>
       <div>Weeks of stock</div><div>{{ r.cover_weeks if r.cover_weeks is not none else '—' }} <span class="muted">(target {{ r.min_cover|int }}–{{ r.max_cover|int }})</span></div>
       <div>Avg sales, last 4 weeks</div><div>{{ r.avg4 if r.avg4 is not none else '—' }}</div>
       <div>Avg sales, last 12 weeks</div><div>{{ r.avg12 if r.avg12 is not none else '—' }}</div>

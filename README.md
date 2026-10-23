@@ -7,6 +7,7 @@ process. It is a **rules engine with a human review loop**, not a forecasting mo
 - **Schedule:** Monday and Thursday, 06:00 IST (Vercel Cron). Weekly summary for Deepa every Friday.
 - **Database:** Neon Postgres (project `freshroots-demand-planning`)
 - **Email:** Resend
+- **Stock on order:** Zoho Inventory open purchase orders, counted in weeks of stock
 
 ## How it works
 
@@ -51,7 +52,7 @@ SAP CSV exports ──► Connector ──► Validation ──► Rules engine 
 ```
 config/rules.yaml        every threshold
 data/                    the 5 sample CSVs
-src/connectors/          Connector interface + csv_folder, https, s3, sftp, zoho (stub)
+src/connectors/          Connector interface + csv_folder, https, s3, sftp; zoho + zoho_api (open POs)
 src/ingest/validate.py   typing, validation, reason codes
 src/engine/              weeks, features, rules, exceptions, sizing, pipeline
 src/ai/explain.py        Claude explanations + validation + template fallback

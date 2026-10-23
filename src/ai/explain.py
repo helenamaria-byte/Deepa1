@@ -67,6 +67,8 @@ def build_facts(rec: dict, festival: bool, rules: RulesConfig) -> dict:
         "pct_change_short_vs_long": pct,
         "weekly_demand_used": rec.get("weekly_demand"),
         "units_on_hand": _int_if_whole(rec.get("on_hand")),
+        "units_on_order": _int_if_whole(rec.get("on_order") or 0),
+        "on_order_counted_in_cover": bool(rules.open_orders.include_in_cover),
         "cover_weeks": rec.get("cover_weeks"),
         "min_cover_weeks": _int_if_whole(rec.get("min_cover")),
         "max_cover_weeks": _int_if_whole(rec.get("max_cover")),
@@ -87,6 +89,8 @@ def template_explanation(f: dict) -> str:
     """Deterministic explanation built only from the facts. Always available."""
     status = f["status"]
     perish = " for a perishable item" if f["perishable"] else ""
+    po = (f", counting {f['units_on_order']} units already on order"
+          if f.get("units_on_order") and f.get("on_order_counted_in_cover") else "")
     fest = f" (demand includes the {f['festival_uplift_pct']}% festival uplift)" if f["festival_month"] else ""
     trend = (f"Sales over the last {f['short_weeks']} weeks average {f['avg_last_short_weeks']} a week, "
              f"{f['pct_change_short_vs_long']}% above the {f['long_weeks']}-week average of "
@@ -95,14 +99,15 @@ def template_explanation(f: dict) -> str:
         return "Needs your judgment: " + "; ".join(f["exception_reasons"]) + "."
     if status == "STOCKOUT_RISK":
         lead = trend if "HIGH_DEMAND" in f["flags"] else ""
-        return (f"{lead}Only {f['cover_weeks']} weeks of stock left, below the {f['min_cover_weeks']}-week "
+        return (f"{lead}Only {f['cover_weeks']} weeks of stock left{po}, below the {f['min_cover_weeks']}-week "
                 f"minimum{perish}{fest}. Reorder {f['recommended_qty']} units now.")
     if status == "OVERSTOCK_RISK":
-        return (f"{f['cover_weeks']} weeks of stock is above the {f['max_cover_weeks']}-week maximum"
+        return (f"{f['cover_weeks']} weeks of stock{po} is above the {f['max_cover_weeks']}-week maximum"
                 f"{perish}{fest}. Pause the next order.")
     if status == "HIGH_DEMAND":
-        return trend + f"Reorder {f['recommended_qty']} units."
-    return (f"{f['cover_weeks']} weeks of stock is within the {f['min_cover_weeks']} to "
+        return trend + (f"There are {f['cover_weeks']} weeks of stock{po}, but reorder "
+                        f"{f['recommended_qty']} units to keep up.")
+    return (f"{f['cover_weeks']} weeks of stock{po} is within the {f['min_cover_weeks']} to "
             f"{f['max_cover_weeks']}-week range{fest}. No action needed.")
 
 

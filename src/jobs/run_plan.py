@@ -19,11 +19,12 @@ from datetime import date, datetime, timedelta, timezone
 from src.ai.explain import Explainer, build_facts
 from src.connectors.base import Connector
 from src.connectors.factory import make_connector
+from src.connectors.zoho import ZohoConnector
 from src.engine.pipeline import run_engine
 from src.outputs.email import Mailer, render
 from src.outputs.judgment_log import export_judgment_log
 from src.outputs.workbook import build_workbook
-from src.retry import with_retry
+from src.retry import RetryError, with_retry
 from src.settings import settings
 from src.store.models import utcnow
 from src.store.repo import Store
@@ -39,7 +40,7 @@ def today_ist() -> date:
 
 def _scrub(text: str) -> str:
     for secret in (settings.anthropic_api_key, settings.resend_api_key, settings.smtp_password,
-                   settings.data_source_credentials):
+                   settings.data_source_credentials, settings.zoho_client_secret, settings.zoho_refresh_token):
         if secret:
             text = text.replace(secret, "***")
     db = settings.database_url
@@ -50,7 +51,8 @@ def _scrub(text: str) -> str:
 
 def run_plan(run_date: date | None = None, trigger: str = "manual", store: Store | None = None,
              connector: Connector | None = None, mailer: Mailer | None = None,
-             explainer: Explainer | None = None, sleep=time.sleep, send_email: bool = True) -> dict:
+             explainer: Explainer | None = None, sleep=time.sleep, send_email: bool = True,
+             zoho: ZohoConnector | None = None) -> dict:
     run_date = run_date or today_ist()
     store = store or Store()
     with_retry(store.migrate, "database:migrate", sleep=sleep)
@@ -65,7 +67,21 @@ def run_plan(run_date: date | None = None, trigger: str = "manual", store: Store
     try:
         rules_version, rules = store.current_rules()
         raw = with_retry(connector.fetch, f"connector:{connector.name}", sleep=sleep, on_attempt=count_attempt)
+        source = connector.name
+        zoho = zoho or ZohoConnector()
+        zoho_warning = ""
+        if zoho.enabled:
+            # Stock on order. If Zoho is down the plan still runs, with a clear warning.
+            try:
+                raw["open_purchase_orders"] = with_retry(zoho.fetch_open_pos, "connector:zoho", sleep=sleep)
+                source += "+zoho"
+            except RetryError as exc:
+                log.warning("Zoho unavailable: %s", type(exc.last).__name__)
+                zoho_warning = ("Open purchase orders could not be read from Zoho, so weeks of stock do not "
+                                "include stock already on order. Check orders in transit before reordering.")
         result = run_engine(raw, run_date, rules)
+        if zoho_warning:
+            result.warnings.append(zoho_warning)
 
         explainer = explainer or Explainer(settings.anthropic_api_key, settings.anthropic_model,
                                            cache=store.ai_cache())
@@ -81,7 +97,7 @@ def run_plan(run_date: date | None = None, trigger: str = "manual", store: Store
         counts["NEED_REVIEW"] = len(rows) - by_status.get("OK", 0)
         with_retry(lambda: store.update_run(
             run_id, status="SUCCESS", finished_at=utcnow(), rules_version=rules_version,
-            festival=result.festival, data_week=result.data_week, connector=connector.name,
+            festival=result.festival, data_week=result.data_week, connector=source,
             attempts=attempts["n"], warnings=result.warnings, counts=counts), "database:finish", sleep=sleep)
 
         run = store.get_run(run_id)

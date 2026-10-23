@@ -10,7 +10,8 @@
   <tr>
     <td><b>{{ r.sku_id }}</b><div class="muted">{{ r.sku_name }}</div><div class="muted">{{ r.distributor_name }}</div></td>
     <td>{% for code, text in r.reasons %}<div><span class="badge purple">{{ code }}</span> {{ text }}</div>{% endfor %}</td>
-    <td>{{ qty(r.on_hand|int if r.on_hand is not none else none) }}</td>
+    <td>{{ qty(r.on_hand|int if r.on_hand is not none else none) }}
+        {% if r.on_order %}<div class="muted">+{{ qty(r.on_order|int) }} on order</div>{% endif %}</td>
     <td>{{ r.cover_weeks if r.cover_weeks is not none else '—' }}</td>
     <td>{{ r.avg4 if r.avg4 is not none else '—' }} <span class="muted">(last 4 wks)</span><br>
         {{ r.avg12 if r.avg12 is not none else '—' }} <span class="muted">(last 12 wks)</span></td>

@@ -52,6 +52,7 @@ def run_engine(raw: dict[str, pd.DataFrame], run_date: date, rules: RulesConfig)
             "perishable": bool(f["perishable"]),
             "standard_qty": _r(f["standard_qty"], 2),
             "on_hand": _r(f["on_hand"], 2),
+            "on_order": _r(f["on_order"], 2),
             "inventory_as_of": f["inventory_as_of"] if pd.notna(f["inventory_as_of"]) else None,
             "history_weeks": int(f["history_weeks"]),
             "avg4": _r(f["avg4"], 2),

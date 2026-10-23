@@ -14,6 +14,8 @@ PATTERNS = {
     "GitHub token": r"gh[pousr]_[A-Za-z0-9]{30,}",
     "Postgres URL with password": r"postgres(?:ql)?://[^:\s/]+:[^@\s]{6,}@",
     "AWS key": r"AKIA[0-9A-Z]{16}",
+    "Zoho token or code": r"1000\.[0-9a-f]{32}\.[0-9a-f]{32}",
+    "Zoho client secret": r"\b[0-9a-f]{42}\b",
     "Private key": r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
 }
 

@@ -16,7 +16,8 @@ def isolated_env(tmp_path, monkeypatch):
     monkeypatch.setenv("FRESHROOTS_VAR_DIR", str(tmp_path / "var"))
     monkeypatch.setenv("JUDGMENT_LOG_PATH", str(tmp_path / "judgment_log.md"))
     for name in ("RESEND_API_KEY", "EMAIL_PROVIDER", "ANTHROPIC_API_KEY", "SMTP_HOST", "DATA_SOURCE_URL",
-                 "DASHBOARD_USERS", "VERCEL", "NEON_API_KEY", "VERCEL_TOKEN"):
+                 "DASHBOARD_USERS", "VERCEL", "NEON_API_KEY", "VERCEL_TOKEN", "AUTH_REQUIRED", "ZOHO_ENABLED",
+                 "ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET", "ZOHO_REFRESH_TOKEN", "ZOHO_ORG_ID"):
         monkeypatch.setenv(name, "")
     monkeypatch.setenv("EMAIL_TO_RAGHAV", "raghav@example.com")
     monkeypatch.setenv("EMAIL_TO_PROCUREMENT", "procurement@example.com")

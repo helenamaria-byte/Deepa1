@@ -52,6 +52,7 @@ def build_features(clean: CleanData, rules: RulesConfig) -> pd.DataFrame:
     df["perishable"] = master["Perishability"].reindex(skus).isin(rules.cover.perishable_values)
     df["standard_qty"] = master["Standard_Reorder_Qty"].reindex(skus)
     df["on_hand"] = inv["Units_On_Hand"].reindex(skus)
+    df["on_order"] = clean.on_order.reindex(skus).fillna(0.0).astype(float)
     df["inventory_as_of"] = inv["As_Of_Date"].reindex(skus)
     df["history_weeks"] = history.reindex(skus).fillna(0).astype(int)
 
@@ -64,9 +65,10 @@ def build_features(clean: CleanData, rules: RulesConfig) -> pd.DataFrame:
     baseline = df["avg4"] if rules.windows.demand_baseline == "short" else df["avg12"]
     df["weekly_demand"] = baseline * demand_multiplier(festival, rules)
     on_hand = df["on_hand"].astype(float)
+    stock = on_hand + df["on_order"] if rules.open_orders.include_in_cover else on_hand
     demand = df["weekly_demand"].astype(float)
     with np.errstate(divide="ignore", invalid="ignore"):
-        cover = np.where(demand > 0, on_hand / demand, np.inf)
+        cover = np.where(demand > 0, stock / demand, np.inf)
     df["cover_weeks"] = cover
     df.loc[on_hand.isna() | df["avg12"].isna(), "cover_weeks"] = np.nan
 
