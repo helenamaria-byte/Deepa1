@@ -17,7 +17,7 @@
     <td>{% if r.counts %}{{ r.counts.NEED_REVIEW }} need review of {{ r.counts.TOTAL }}{% endif %}
         {% for w in r.warnings %}<div class="muted">⚠ {{ w }}</div>{% endfor %}
         {% if r.error %}<details><summary>Error details</summary><pre>{{ r.error }}</pre></details>{% endif %}</td>
-    <td>{% if r.status == 'SUCCESS' %}<a href="/recommendations?run={{ r.id }}">View</a> · <a href="/runs/{{ r.id }}/workbook">Excel</a>{% endif %}</td>
+    <td>{% if r.status == 'SUCCESS' %}<a href="/?run={{ r.id }}">View</a> · <a href="/runs/{{ r.id }}/workbook">Excel</a>{% endif %}</td>
   </tr>
   {% else %}
   <tr><td colspan="8" class="muted">No runs yet.</td></tr>

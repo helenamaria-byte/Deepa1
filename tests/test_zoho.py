@@ -133,7 +133,7 @@ def test_workbook_and_dashboard_show_on_order(raw):
     store = get_store()
     run = run_plan(RUN_DATE, store=store, connector=StaticConnector(raw), sleep=no_sleep, zoho=connector())
     c = TestClient(app)
-    assert "+1,000 on order" in c.get("/recommendations").text
+    assert "Includes 1,000 units on order that arrive before stock runs out" in c.get("/").text
     wb = load_workbook(io.BytesIO(c.get(f"/runs/{run['id']}/workbook").content))
     header = [x.value for x in wb["Recommendations"][1]]
     assert "Units_On_Order" in header

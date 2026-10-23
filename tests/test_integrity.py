@@ -170,10 +170,9 @@ def test_counts_agree_across_pages(plan):
     assert "3 of 15 done" in c.get("/").text
     assert "Current plan #%d (Thu 22 Oct): 3 of 15 decided" % rid in c.get("/decisions").text
     assert ">3 of 15<" in c.get("/analytics").text
-    assert "Approve all 12 SKUs still waiting?" in c.get("/recommendations?show=todo").text or \
-        "Approve all" in c.get("/recommendations?show=todo").text
-    todo = c.get("/recommendations?show=todo").text
-    assert len(re.findall(r'<tr id="SKU\d+">', todo)) == 12
+    todo = c.get("/?show=todo").text
+    assert len(re.findall(r'class="item [^"]*" id="SKU\d+"', todo)) == 12 and "Approve all 12" in todo
+    assert "Showing 12 of 15 SKUs" in todo
 
 
 def test_old_duplicate_clicks_are_marked_replaced_not_deleted(plan):

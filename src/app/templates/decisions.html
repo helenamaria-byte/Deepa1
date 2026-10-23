@@ -37,7 +37,7 @@
   {% for o in rows %}
   <tr style="{{ 'opacity:.55' if o.state != 'current' }}">
     <td>{{ o.created_at.strftime('%d %b %Y %H:%M') }}</td>
-    <td>#{{ o.run_id }}{% if run and o.run_id != run.id %}<div class="muted">earlier plan</div>{% endif %}</td>
+    <td><a href="/?run={{ o.run_id }}">#{{ o.run_id }}</a>{% if run and o.run_id != run.id %}<div class="muted">earlier plan</div>{% endif %}</td>
     <td><a href="/sku/{{ o.run_id }}/{{ o.sku_id }}">{{ o.sku_id }}</a></td>
     <td>{% if o.decision == 'APPROVED' %}<span class="badge green">Approved</span>{% else %}<span class="badge blue">Changed</span>{% endif %}</td>
     <td>{{ qty(o.recommended_qty) }}</td>

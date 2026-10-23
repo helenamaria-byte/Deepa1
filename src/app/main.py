@@ -159,11 +159,6 @@ def logout():
 
 
 # ---- helpers ---------------------------------------------------------------
-def _run_or_latest(run_id: int | None) -> dict | None:
-    store = get_store()
-    return store.get_run(run_id) if run_id else store.latest_run()
-
-
 def _with_decisions(run: dict) -> list[dict]:
     store = get_store()
     recs = store.recommendations(run["id"])
@@ -248,28 +243,44 @@ def rules_summary(rules: RulesConfig) -> list[tuple[str, str]]:
 
 # ---- pages -----------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request):
-    """Raghav's landing page: what needs a decision today, grouped by action."""
+def home(request: Request, run: int | None = None, distributor: str = "", category: str = "",
+         status: str = "", show: str = ""):
+    """Raghav's landing page: what needs a decision, grouped by action, with optional
+    filters (distributor, category, status, only waiting) and ?run= for an older plan."""
     viewer(request)
     store = get_store()
-    run = store.latest_run()
+    latest = store.latest_run()
+    older = store.get_run(run) if run and latest and run != latest["id"] else None
+    run = older if older and older["status"] == "SUCCESS" else latest
     last_any = store.latest_run(status=None)
     # Show the rules this plan was made with, not whatever was saved since.
     rules = store.rules_for_version(run["rules_version"]) if run else store.current_rules()[1]
     recs = _with_decisions(run) if run else []
     for r in recs:
         r["chips"] = rule_chips(r, rules)
+    f = {"run": run["id"] if older else "", "distributor": distributor, "category": category,
+         "status": status, "show": show}
+    shown = [r for r in recs
+             if (not distributor or r["distributor_name"] == distributor)
+             and (not category or r["category"] == category)
+             and (not status or r["status"] == status)
+             and (show != "todo" or not r["decision"])]
     groups = [{"status": s, "title": t, "color": c, "hint": h,
-               "rows": sorted((r for r in recs if r["status"] == s), key=urgency_key)}
+               "rows": sorted((r for r in shown if r["status"] == s), key=urgency_key)}
               for s, t, c, h in ACTION_GROUPS]
     groups = [g for g in groups if g["rows"]]
     todo = recs  # every SKU needs a decision, including "no order needed"
     progress = store.decision_progress(run["id"]) if run else {"total": 0, "decided": 0, "pending": 0}
-    pending_approvable = [r for r in todo if not r["decision"] and r["status"] != "EXCEPTION"]
+    pending_approvable = [r for r in shown if not r["decision"] and r["status"] != "EXCEPTION"]
     now = now_ist()
-    status = plan_status(run, recs, rules, now, last_scheduled_run(now)) if run else None
-    return page(request, "home.html", run=run, last_any=last_any, groups=groups, todo=todo,
-                decided=progress["decided"], pending_approvable=pending_approvable, plan=status,
+    plan = plan_status(run, recs, rules, now, last_scheduled_run(now)) if run else None
+    here = "/?" + urlencode({k: v for k, v in f.items() if v})
+    return page(request, "home.html", run=run, older=older, latest=latest, last_any=last_any, groups=groups,
+                todo=todo, shown=shown, f=f, here=here,
+                filtered=any(v for k, v in f.items() if k != "run"),
+                distributors=sorted({r["distributor_name"] for r in recs if r["distributor_name"]}),
+                categories=sorted({r["category"] for r in recs if r["category"]}),
+                decided=progress["decided"], pending_approvable=pending_approvable, plan=plan,
                 rules_summary=rules_summary(rules), uplift_pct=round((rules.festival.uplift - 1) * 100),
                 now_ist=now, next_run=next_scheduled_run(now))
 
@@ -285,41 +296,33 @@ def set_name(request: Request, who: str = Form(""), next: str = Form("/")):
 
 @app.get("/review")
 def review_shortcut():
-    return RedirectResponse("/recommendations?show=todo", status_code=303)
+    return RedirectResponse("/?show=todo", status_code=303)
 
 
-@app.get("/recommendations", response_class=HTMLResponse)
-def recommendations(request: Request, run: int | None = None, status: str = "", distributor: str = "",
-                    category: str = "", show: str = ""):
-    viewer(request)
-    r = _run_or_latest(run)
-    recs = [x for x in _with_decisions(r) if x["status"] != "EXCEPTION"] if r else []
-    distributors = sorted({x["distributor_name"] for x in recs if x["distributor_name"]})
-    categories = sorted({x["category"] for x in recs if x["category"]})
-    rows = [x for x in recs
-            if (not status or x["status"] == status)
-            and (not distributor or x["distributor_name"] == distributor)
-            and (not category or x["category"] == category)
-            and (show != "todo" or not x["decision"])]
-    pending = [x for x in recs if not x["decision"]]
-    return page(request, "recommendations.html", run=r, rows=rows, distributors=distributors,
-                categories=categories, f={"status": status, "distributor": distributor, "category": category,
-                                          "show": show}, pending=pending)
+@app.get("/recommendations")
+def recommendations_moved(request: Request):
+    """The old Recommendations tab: its filters now live on Today."""
+    query = request.url.query
+    return RedirectResponse("/?" + query if query else "/", status_code=303)
 
 
+@app.post("/approve-all")
 @app.post("/recommendations/approve-all")
 def approve_all(request: Request, run_id: int = Form(...), reason: str = Form(""), who: str = Form(""),
-                next: str = Form("/recommendations")):
-    target = _safe_next(next, "/recommendations")
+                next: str = Form("/"), skus: str = Form("")):
+    """Approve every suggestion still waiting (never exceptions). With `skus`, only those
+    (Today sends the SKUs currently shown, so a filtered view approves what you see)."""
+    target = _safe_next(next, "/")
     try:
         user = actor(request, who)
     except ValueError as exc:
         return back(target, err=str(exc))
     store = get_store()
     run = store.get_run(run_id)
+    only = {s.strip() for s in skus.split(",") if s.strip()}
     n = 0
     for r in _with_decisions(run):
-        if r["status"] != "EXCEPTION" and not r["decision"]:
+        if r["status"] != "EXCEPTION" and not r["decision"] and (not only or r["sku_id"] in only):
             store.add_override(run_id, r["sku_id"], "APPROVED", None, reason.strip() or APPROVE_REASON, user)
             n += 1
     return remember(back(target, msg=f"Approved {n} suggestions."), user)
@@ -337,7 +340,7 @@ def sku_detail(request: Request, run_id: int, sku_id: str):
     store = get_store()
     rec = store.recommendation(run_id, sku_id)
     if rec is None:
-        return back("/recommendations", err=f"{sku_id} was not found in that run.")
+        return back("/", err=f"{sku_id} was not found in that run.")
     _, rules = store.current_rules()
     rec["reasons"] = [(c, reason_text(c, rules)) for c in rec["exception_codes"]]
     history = [o for o in store.overrides(run_id, include_deleted=True) if o["sku_id"] == sku_id]
@@ -361,7 +364,7 @@ def decide(request: Request, run_id: int, sku_id: str, decision: str = Form(...)
     except ValueError as exc:
         return back(target, err=f"{sku_id}: {exc}")
     rec = store.recommendation(run_id, sku_id)
-    default = "/" if rec["status"] == "EXCEPTION" else "/recommendations"
+    default = "/"
     return remember(back(_safe_next(next, default), msg=f"Saved your decision for {sku_id}."), user)
 
 

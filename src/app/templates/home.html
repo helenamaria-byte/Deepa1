@@ -82,7 +82,10 @@
 </div>
 {% endif %}
 
-{% if last_any and last_any.status == 'FAILED' and last_any.id != run.id %}
+{% if older %}
+  <div class="warn">You are looking at an older plan (#{{ run.id }}, {{ run.run_date.strftime('%a %d %b') }}). <a href="/">Go to the current plan #{{ latest.id }}</a></div>
+{% endif %}
+{% if last_any and last_any.status == 'FAILED' and last_any.id != run.id and not older %}
   <div class="err">The latest run (#{{ last_any.id }}) failed. You are seeing the last good plan. <a href="/runs">See details</a></div>
 {% endif %}
 
@@ -97,6 +100,29 @@
 {% if not todo %}
   <div class="card"><h2 style="margin:0">✓ Nothing needs a decision today. All {{ run.counts.TOTAL }} SKUs are within their stock range.</h2></div>
 {% endif %}
+
+<form method="get" action="/" class="filters" style="margin:18px 0 0">
+  {% if f.run %}<input type="hidden" name="run" value="{{ f.run }}">{% endif %}
+  <div><label for="f-dist">Distributor</label>
+    <select id="f-dist" name="distributor" onchange="this.form.submit()">
+      <option value="">All</option>
+      {% for d in distributors %}<option {{ 'selected' if f.distributor == d }}>{{ d }}</option>{% endfor %}
+    </select></div>
+  <div><label for="f-cat">Category</label>
+    <select id="f-cat" name="category" onchange="this.form.submit()">
+      <option value="">All</option>
+      {% for c in categories %}<option {{ 'selected' if f.category == c }}>{{ c }}</option>{% endfor %}
+    </select></div>
+  <div><label for="f-show">Show</label>
+    <select id="f-show" name="show" onchange="this.form.submit()">
+      <option value="" {{ 'selected' if not f.show }}>All SKUs</option>
+      <option value="todo" {{ 'selected' if f.show == 'todo' }}>Only ones waiting for a decision</option>
+    </select></div>
+  {% if f.status %}<input type="hidden" name="status" value="{{ f.status }}">{% endif %}
+  <noscript><button class="btn small">Filter</button></noscript>
+  {% if filtered %}<span class="muted">Showing {{ shown|length }} of {{ todo|length }} SKUs · <a href="/{{ '?run=' ~ f.run if f.run }}">Clear filters</a></span>{% endif %}
+</form>
+{% if filtered and not shown %}<div class="card" style="margin-top:12px"><span class="muted">No SKUs match these filters.</span></div>{% endif %}
 
 {% for g in groups %}
 <section class="group">
@@ -119,15 +145,16 @@
       {% else %}Suggested order<b>{{ qty(r.recommended_qty) }}</b>units{% endif %}
     </div>
 
-    {{ decide_actions(r, '/#' ~ r.sku_id) }}
+    {{ decide_actions(r, here ~ '#' ~ r.sku_id) }}
   </div>
   {% endfor %}
 </section>
 {% endfor %}
 
 {% if pending_approvable|length > 1 %}
-<form method="post" action="/recommendations/approve-all" class="card" style="margin-top:18px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-  <input type="hidden" name="run_id" value="{{ run.id }}"><input type="hidden" name="next" value="/">
+<form method="post" action="/approve-all" class="card" style="margin-top:18px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+  <input type="hidden" name="run_id" value="{{ run.id }}"><input type="hidden" name="next" value="{{ here }}">
+  <input type="hidden" name="skus" value="{{ pending_approvable|map(attribute='sku_id')|join(',') }}">
   <div style="flex:1;min-width:220px"><b>Agree with the rest?</b>
     <div class="muted">Approves the {{ pending_approvable|length }} SKUs above that are still waiting, including the ones needing no order (not the ones that need your judgment).</div></div>
   <button class="btn">Approve all {{ pending_approvable|length }}</button>
