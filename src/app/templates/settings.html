@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import who_field %}
 {% block content %}
 <h1>Settings</h1>
 <p class="sub">The planning rules (version {{ version }}). Saving creates a new version, and it applies from the next run.</p>
@@ -21,6 +22,7 @@
   <label for="note">What changed and why</label>
   <input id="note" type="text" name="note" placeholder="e.g. Raised perishable maximum after the October review">
   <div style="height:14px"></div>
+  {{ who_field(user, auth_required) }}
   <button class="btn">Save as new version</button>
 </form>
 

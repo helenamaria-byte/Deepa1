@@ -78,6 +78,8 @@ class Settings:
     app_url = property(lambda self: _env("APP_URL", "http://localhost:8000"))
     secret_key = property(lambda self: _env("SECRET_KEY", "dev-only-not-secret"))
     cron_secret = property(lambda self: _env("CRON_SECRET"))
+    # Off by default: the dashboard opens without a login and asks for a name on changes.
+    auth_required = property(lambda self: _env("AUTH_REQUIRED", "false").lower() == "true")
     dashboard_users = property(lambda self: _env("DASHBOARD_USERS"))
 
     data_source_url = property(lambda self: _env("DATA_SOURCE_URL"))

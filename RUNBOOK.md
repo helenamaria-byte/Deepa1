@@ -32,6 +32,7 @@ For the IT team. Day-to-day use of the dashboard needs none of this.
 | Connect real SAP exports | Set `DATA_SOURCE_URL` (`https://...`, `s3://bucket/prefix`, `sftp://user@host/folder`, or `file:///path`) and `DATA_SOURCE_CREDENTIALS`. The folder must contain the 5 files with the same names and columns. For S3/SFTP add `boto3` / `paramiko` to `requirements.txt`. |
 | Turn on Claude explanations | Set `ANTHROPIC_API_KEY`. Replies are validated; any failure falls back to templates. |
 | Send email from a company address | Verify the domain in Resend, then set `EMAIL_FROM` and the `EMAIL_TO_*` addresses. |
+| Require logins again | Set `AUTH_REQUIRED=true` in Vercel and redeploy. The login page and the raghav/procurement/deepa accounts come back. |
 | Add or reset a login | `DASHBOARD_USERS=email:password,...` then `python -m src.jobs.bootstrap` with `force=True` from a Python shell, or create the user with `Store().create_user(...)`. |
 | Use GitHub Actions as the scheduler instead | Add repository secrets `DATABASE_URL`, `RESEND_API_KEY` and variables for the emails, then set variable `USE_GITHUB_SCHEDULER=true` and remove the `crons` block from `vercel.json`. |
 | Self-host without Vercel | `docker compose up -d` runs the dashboard on port 8000 and the same schedule via cron (TZ Asia/Kolkata). |

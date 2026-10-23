@@ -25,11 +25,42 @@ def client(raw, monkeypatch):
     return c
 
 
-def test_pages_require_login():
+def test_pages_require_login_when_auth_on(monkeypatch):
+    monkeypatch.setenv("AUTH_REQUIRED", "true")
     c = TestClient(app)
     for path in ["/", "/recommendations", "/exceptions", "/decisions", "/runs", "/settings"]:
         r = c.get(path, follow_redirects=False)
         assert r.status_code == 303 and r.headers["location"].startswith("/login"), path
+    assert c.post("/runs/new", follow_redirects=False).status_code == 303
+
+
+@pytest.fixture
+def open_client(raw):
+    store = get_store()
+    run_plan(RUN_DATE, store=store, connector=StaticConnector(raw), sleep=no_sleep)
+    return TestClient(app)
+
+
+def test_pages_open_without_login(open_client):
+    for path in ["/", "/recommendations", "/exceptions", "/decisions", "/runs", "/settings", "/sku/1/SKU001"]:
+        r = open_client.get(path, follow_redirects=False)
+        assert r.status_code == 200, path
+    assert "Stock plan" in open_client.get("/").text
+    assert 'name="who"' in open_client.get("/sku/1/SKU001").text
+
+
+def test_open_mode_decision_needs_name_and_remembers_it(open_client):
+    r = open_client.post("/sku/1/SKU003", data={"decision": "APPROVED", "reason": "Fine"})
+    assert "enter your name" in r.text
+    assert get_store().overrides(1) == []
+    r = open_client.post("/sku/1/SKU003", data={"decision": "APPROVED", "reason": "Fine", "who": "  Raghav  K "})
+    assert "Saved your decision for SKU003" in r.text
+    assert get_store().overrides(1)[0]["username"] == "Raghav K"
+    # The name is remembered and pre-filled, and used when the form omits it.
+    assert 'value="Raghav K"' in open_client.get("/sku/1/SKU001").text
+    r = open_client.post("/sku/1/SKU001", data={"decision": "APPROVED", "reason": "Agree"})
+    assert "Saved your decision for SKU001" in r.text
+    assert get_store().latest_decisions(1)["SKU001"]["username"] == "Raghav K"
 
 
 def test_wrong_password_rejected(client):

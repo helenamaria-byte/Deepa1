@@ -80,7 +80,7 @@
 </style>
 </head>
 <body>
-{% if user %}
+{% if request.url.path != '/login' %}
 <header><div class="bar">
   <a class="logo" href="/">Freshroots Planning</a>
   <nav>
@@ -92,7 +92,7 @@
     <a href="/runs" class="{{ 'on' if here.startswith('/runs') }}">Runs</a>
     <a href="/settings" class="{{ 'on' if here.startswith('/settings') }}">Settings</a>
   </nav>
-  <span class="who">{{ user }}<a href="/logout">Log out</a></span>
+  <span class="who">{{ user }}{% if logged_in %}<a href="/logout">Log out</a>{% endif %}</span>
 </div></header>
 {% endif %}
 <main>

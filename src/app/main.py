@@ -1,8 +1,10 @@
 """Review dashboard (FastAPI + server-rendered HTML; runs locally or on Vercel).
 
 Pages: Home, Recommendations, Exceptions, Decisions (override log + Excel upload),
-Runs, Settings. Every page needs a login. Cron endpoints are protected by
-CRON_SECRET (Vercel sends it automatically as a bearer token)."""
+Runs, Settings. Pages are open by default; anyone making a change gives their
+name, which is stored with the decision. AUTH_REQUIRED=true turns logins back
+on. Cron endpoints are protected by CRON_SECRET (Vercel sends it automatically
+as a bearer token)."""
 from __future__ import annotations
 
 import hmac
@@ -26,6 +28,7 @@ from src.settings import settings
 from src.store.repo import Store
 
 SESSION_COOKIE = "fr_session"
+NAME_COOKIE = "fr_name"
 SESSION_DAYS = 14
 
 app = FastAPI(title="Freshroots demand planning", docs_url=None, redoc_url=None, openapi_url=None)
@@ -79,8 +82,41 @@ def require_user(request: Request) -> str:
     return user
 
 
+def viewer(request: Request) -> None:
+    """Gate for viewing pages: open unless AUTH_REQUIRED=true."""
+    if settings.auth_required:
+        require_user(request)
+
+
+def display_name(request: Request) -> str:
+    """Logged-in username, else the name this browser last entered."""
+    return current_user(request) or request.cookies.get(NAME_COOKIE, "")
+
+
+def actor(request: Request, who: str = "", required: bool = True) -> str:
+    """Who is making a change. With logins on, the logged-in user. Without, the
+    name typed in the form (remembered in a cookie). Raises ValueError if a
+    required name is missing."""
+    if settings.auth_required:
+        return require_user(request)
+    name = " ".join((who or "").split())[:60] or display_name(request)
+    if not name and required:
+        raise ValueError("Please enter your name so the log shows who made this decision.")
+    return name or "anonymous"
+
+
+def remember(resp, name: str):
+    """Remember the name for this browser so it is pre-filled next time."""
+    if name and name != "anonymous" and not settings.auth_required:
+        resp.set_cookie(NAME_COOKIE, name, max_age=365 * 86400, samesite="lax",
+                        secure=settings.app_url.startswith("https"))
+    return resp
+
+
 def page(request: Request, name: str, **ctx) -> HTMLResponse:
-    ctx.setdefault("user", current_user(request))
+    ctx.setdefault("user", display_name(request))
+    ctx.setdefault("logged_in", bool(current_user(request)))
+    ctx.setdefault("auth_required", settings.auth_required)
     ctx.setdefault("msg", request.query_params.get("msg", ""))
     ctx.setdefault("err", request.query_params.get("err", ""))
     return templates.TemplateResponse(request, name, ctx)
@@ -134,7 +170,7 @@ def _with_decisions(run: dict) -> list[dict]:
 # ---- pages -----------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
-    require_user(request)
+    viewer(request)
     store = get_store()
     run = store.latest_run()
     last_any = store.latest_run(status=None)
@@ -154,7 +190,7 @@ def review_shortcut():
 @app.get("/recommendations", response_class=HTMLResponse)
 def recommendations(request: Request, run: int | None = None, status: str = "", distributor: str = "",
                     category: str = "", show: str = ""):
-    require_user(request)
+    viewer(request)
     r = _run_or_latest(run)
     recs = [x for x in _with_decisions(r) if x["status"] != "EXCEPTION"] if r else []
     distributors = sorted({x["distributor_name"] for x in recs if x["distributor_name"]})
@@ -171,8 +207,11 @@ def recommendations(request: Request, run: int | None = None, status: str = "", 
 
 
 @app.post("/recommendations/approve-all")
-def approve_all(request: Request, run_id: int = Form(...), reason: str = Form("")):
-    user = require_user(request)
+def approve_all(request: Request, run_id: int = Form(...), reason: str = Form(""), who: str = Form("")):
+    try:
+        user = actor(request, who)
+    except ValueError as exc:
+        return back("/recommendations", show="todo", err=str(exc))
     if not reason.strip():
         return back("/recommendations", show="todo", err="Please write a short reason before approving.")
     store = get_store()
@@ -182,12 +221,12 @@ def approve_all(request: Request, run_id: int = Form(...), reason: str = Form(""
         if r["status"] not in ("OK", "EXCEPTION") and not r["decision"]:
             store.add_override(run_id, r["sku_id"], "APPROVED", None, reason, user)
             n += 1
-    return back("/recommendations", msg=f"Approved {n} suggestions.")
+    return remember(back("/recommendations", msg=f"Approved {n} suggestions."), user)
 
 
 @app.get("/exceptions", response_class=HTMLResponse)
 def exceptions(request: Request, run: int | None = None):
-    require_user(request)
+    viewer(request)
     r = _run_or_latest(run)
     store = get_store()
     _, rules = store.current_rules()
@@ -199,7 +238,7 @@ def exceptions(request: Request, run: int | None = None):
 
 @app.get("/sku/{run_id}/{sku_id}", response_class=HTMLResponse)
 def sku_detail(request: Request, run_id: int, sku_id: str):
-    require_user(request)
+    viewer(request)
     store = get_store()
     rec = store.recommendation(run_id, sku_id)
     if rec is None:
@@ -212,34 +251,37 @@ def sku_detail(request: Request, run_id: int, sku_id: str):
 
 @app.post("/sku/{run_id}/{sku_id}")
 def decide(request: Request, run_id: int, sku_id: str, decision: str = Form(...),
-           final_qty: str = Form(""), reason: str = Form("")):
-    user = require_user(request)
+           final_qty: str = Form(""), reason: str = Form(""), who: str = Form("")):
     qty = int(final_qty) if final_qty.strip().lstrip("-").isdigit() else None
     try:
+        user = actor(request, who)
         get_store().add_override(run_id, sku_id, decision, qty, reason, user)
     except ValueError as exc:
         return back(f"/sku/{run_id}/{sku_id}", err=str(exc))
     rec = get_store().recommendation(run_id, sku_id)
     target = "/exceptions" if rec["status"] == "EXCEPTION" else "/recommendations"
-    return back(target, msg=f"Saved your decision for {sku_id}.")
+    return remember(back(target, msg=f"Saved your decision for {sku_id}."), user)
 
 
 @app.get("/decisions", response_class=HTMLResponse)
 def decisions(request: Request):
-    require_user(request)
+    viewer(request)
     return page(request, "decisions.html", rows=get_store().overrides(include_deleted=True)[:300])
 
 
 @app.post("/decisions/{override_id}/delete")
-def delete_decision(request: Request, override_id: int):
-    user = require_user(request)
+def delete_decision(request: Request, override_id: int, who: str = Form("")):
+    user = actor(request, who, required=False)
     ok = get_store().delete_override(override_id, user)
     return back("/decisions", msg="Decision removed." if ok else "", err="" if ok else "Nothing to remove.")
 
 
 @app.post("/decisions/upload")
-async def upload_decisions(request: Request, file: UploadFile = File(...)):
-    user = require_user(request)
+async def upload_decisions(request: Request, file: UploadFile = File(...), who: str = Form("")):
+    try:
+        user = actor(request, who)
+    except ValueError as exc:
+        return back("/decisions", err=str(exc))
     store = get_store()
     run = store.latest_run()
     if run is None:
@@ -255,20 +297,20 @@ async def upload_decisions(request: Request, file: UploadFile = File(...)):
             saved += 1
         except ValueError as exc:
             problems.append(f"{row['sku_id']}: {exc}")
-    return back("/decisions", msg=f"Imported {saved} decisions.", err="; ".join(problems[:5]))
+    return remember(back("/decisions", msg=f"Imported {saved} decisions.", err="; ".join(problems[:5])), user)
 
 
 @app.get("/runs", response_class=HTMLResponse)
 def runs(request: Request):
-    require_user(request)
+    viewer(request)
     store = get_store()
     return page(request, "runs.html", runs=store.list_runs(50), emails=store.emails(30))
 
 
 @app.post("/runs/new")
-def run_now(request: Request):
-    require_user(request)
-    run = run_plan(today_ist(), trigger=f"dashboard:{current_user(request)}", store=get_store())
+def run_now(request: Request, who: str = Form("")):
+    user = actor(request, who, required=False)
+    run = run_plan(today_ist(), trigger=f"dashboard:{user}", store=get_store())
     if run["status"] == "SUCCESS":
         return back("/", msg=f"New plan created (run {run['id']}).")
     return back("/runs", err=f"Run {run['id']} failed. See the details below.")
@@ -276,7 +318,7 @@ def run_now(request: Request):
 
 @app.get("/runs/{run_id}/workbook")
 def workbook(request: Request, run_id: int):
-    require_user(request)
+    viewer(request)
     store = get_store()
     run = store.get_run(run_id)
     if not run or run["status"] != "SUCCESS":
@@ -292,7 +334,7 @@ def workbook(request: Request, run_id: int):
 
 @app.get("/emails/{email_id}", response_class=HTMLResponse)
 def view_email(request: Request, email_id: int):
-    require_user(request)
+    viewer(request)
     e = get_store().email(email_id)
     if not e:
         return back("/runs", err="Email not found.")
@@ -301,7 +343,7 @@ def view_email(request: Request, email_id: int):
 
 @app.get("/judgment-log.md", response_class=PlainTextResponse)
 def judgment_log(request: Request):
-    require_user(request)
+    viewer(request)
     return judgment_log_markdown(get_store())
 
 
@@ -332,7 +374,7 @@ def _get(data: dict, path: tuple):
 
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request):
-    require_user(request)
+    viewer(request)
     store = get_store()
     version, rules = store.current_rules()
     data = rules.model_dump()
@@ -343,8 +385,11 @@ def settings_page(request: Request):
 
 @app.post("/settings")
 async def save_settings(request: Request):
-    user = require_user(request)
     form = await request.form()
+    try:
+        user = actor(request, str(form.get("who", "")))
+    except ValueError as exc:
+        return back("/settings", err=str(exc))
     store = get_store()
     _, rules = store.current_rules()
     data = rules.model_dump()
@@ -364,7 +409,7 @@ async def save_settings(request: Request):
         return back("/settings", err=f"Not saved: {exc}".splitlines()[0])
     note = str(form.get("note", "")).strip()
     version = store.save_rules(new_rules, user, note)
-    return back("/settings", msg=f"Saved as version {version}. It applies from the next run.")
+    return remember(back("/settings", msg=f"Saved as version {version}. It applies from the next run."), user)
 
 
 # ---- machine endpoints -------------------------------------------------------

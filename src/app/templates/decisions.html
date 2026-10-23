@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import qty %}
+{% from "_macros.html" import qty, who_field %}
 {% block content %}
 <h1>Decisions</h1>
 <p class="sub">Every approval and change, with who made it and why. This log is also saved as <a href="/judgment-log.md">judgment_log.md</a>.</p>
@@ -8,6 +8,7 @@
   <b>Prefer Excel?</b> Download the plan from the Home page, fill in the <i>Override log</i> sheet
   (Decision, Your_Qty, Reason), then upload it here.
   <form method="post" action="/decisions/upload" enctype="multipart/form-data" class="filters" style="margin:12px 0 0">
+    {% if not auth_required %}<div style="min-width:220px">{{ who_field(user, auth_required) }}</div>{% endif %}
     <input type="file" name="file" accept=".xlsx" required>
     <button class="btn small">Upload decisions</button>
   </form>

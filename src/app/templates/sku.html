@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import status_badge, qty %}
+{% from "_macros.html" import status_badge, qty, who_field %}
 {% block content %}
 <p><a href="{{ '/exceptions' if r.status == 'EXCEPTION' else '/recommendations' }}">← Back</a></p>
 <h1>{{ r.sku_id }} · {{ r.sku_name }}</h1>
@@ -21,6 +21,7 @@
       <label for="reason" style="margin-top:12px">Reason (required)</label>
       <textarea id="reason" name="reason" required placeholder="e.g. Distributor confirmed a promotion next week"></textarea>
       <div style="height:12px"></div>
+      {{ who_field(user, auth_required) }}
       <button class="btn">Save decision</button>
     </form>
   </div>

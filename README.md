@@ -3,7 +3,7 @@
 A twice-weekly stock-planning recommendation engine that replaces the manual monthly
 process. It is a **rules engine with a human review loop**, not a forecasting model.
 
-- **Dashboard:** https://freshroots-demand-planning-omega.vercel.app (login required)
+- **Dashboard:** https://freshroots-demand-planning-omega.vercel.app (no login; changes ask for your name. `AUTH_REQUIRED=true` turns logins on)
 - **Schedule:** Monday and Thursday, 06:00 IST (Vercel Cron). Weekly summary for Deepa every Friday.
 - **Database:** Neon Postgres (project `freshroots-demand-planning`)
 - **Email:** Resend

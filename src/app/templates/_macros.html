@@ -3,6 +3,14 @@
 <span class="badge {{ s[1] }}">{{ s[0] }}</span>
 {%- endmacro %}
 
+{% macro who_field(user, auth_required) -%}
+{%- if not auth_required %}
+<label for="who">Your name (required)</label>
+<input id="who" type="text" name="who" value="{{ user or '' }}" required maxlength="60" placeholder="e.g. Raghav" autocomplete="name">
+<div style="height:12px"></div>
+{%- endif %}
+{%- endmacro %}
+
 {% macro qty(value) -%}{{ '—' if value is none else '{:,}'.format(value) }}{%- endmacro %}
 
 {% macro decision_cell(r) -%}

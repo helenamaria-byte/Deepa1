@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import status_badge, qty, decision_cell, run_line %}
+{% from "_macros.html" import status_badge, qty, decision_cell, run_line, who_field %}
 {% block content %}
 <h1>Recommendations</h1>
 {% if not run %}<p class="sub">No plan yet.</p>{% else %}
@@ -56,6 +56,7 @@
     <label for="reason">Reason (required)</label>
     <input id="reason" type="text" name="reason" required placeholder="e.g. Checked with procurement, quantities look right">
     <div style="height:12px"></div>
+    {{ who_field(user, auth_required) }}
     <button class="btn">Approve all {{ pending|length }}</button>
   </form>
 </div>

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import run_line %}
 {% block content %}
-<h1>Hello {{ user|capitalize }}</h1>
+<h1>{{ 'Hello ' ~ user if user else 'Stock plan' }}</h1>
 {% if not run %}
   <p class="sub">No plan has been made yet.</p>
   <form method="post" action="/runs/new"><button class="btn">Make a plan now</button></form>
