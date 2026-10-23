@@ -19,8 +19,8 @@
         <span><b>{{ 'Set the order quantity' if r.status == 'EXCEPTION' else 'Change the quantity' }}</b><br>
         <input type="number" name="final_qty" min="0" step="1" placeholder="Units to order (0 = no order)" style="margin-top:6px"
                onfocus="this.closest('label').querySelector('input[type=radio]').checked=true"></span></label>
-      <label for="reason" style="margin-top:12px">Reason {{ '(required)' if r.status == 'EXCEPTION' else '(required if you change the quantity)' }}</label>
-      <textarea id="reason" name="reason" {{ 'required' if r.status == 'EXCEPTION' }} placeholder="e.g. Distributor confirmed a promotion next week"></textarea>
+      <label for="reason" style="margin-top:12px">Reason (optional)</label>
+      <textarea id="reason" name="reason" placeholder="e.g. Distributor confirmed a promotion next week"></textarea>
       <div style="height:12px"></div>
       {{ who_field(user, auth_required) }}
       <button class="btn">Save decision</button>

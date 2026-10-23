@@ -129,10 +129,8 @@
     {% set here = request.url.path %}
     <a href="/" class="{{ 'on' if here == '/' }}">Today</a>
     <a href="/recommendations" class="{{ 'on' if here.startswith('/recommendations') }}">Recommendations</a>
-    <a href="/exceptions" class="{{ 'on' if here.startswith('/exceptions') }}">Exceptions</a>
     <a href="/decisions" class="{{ 'on' if here.startswith('/decisions') }}">Decisions</a>
     <a href="/analytics" class="{{ 'on' if here.startswith('/analytics') }}">Analytics</a>
-    <a href="/runs" class="{{ 'on' if here.startswith('/runs') }}">Runs</a>
     <a href="/settings" class="{{ 'on' if here.startswith('/settings') }}">Settings</a>
   </nav>
   <span class="who">{{ user }}{% if logged_in %}<a href="/logout">Log out</a>{% endif %}</span>

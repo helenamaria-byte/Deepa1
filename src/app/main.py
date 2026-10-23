@@ -177,6 +177,7 @@ def _safe_next(next_url: str, default: str) -> str:
 
 
 APPROVE_REASON = "Approved as recommended"
+CHANGE_REASON = "Quantity changed (no reason given)"
 
 # Landing-page sections, in the order Raghav should act on them.
 ACTION_GROUPS = [
@@ -306,16 +307,10 @@ def approve_all(request: Request, run_id: int = Form(...), reason: str = Form(""
     return remember(back(target, msg=f"Approved {n} suggestions."), user)
 
 
-@app.get("/exceptions", response_class=HTMLResponse)
-def exceptions(request: Request, run: int | None = None):
-    viewer(request)
-    r = _run_or_latest(run)
-    store = get_store()
-    _, rules = store.current_rules()
-    rows = [x for x in _with_decisions(r) if x["status"] == "EXCEPTION"] if r else []
-    for x in rows:
-        x["reasons"] = [(c, reason_text(c, rules)) for c in x["exception_codes"]]
-    return page(request, "exceptions.html", run=r, rows=rows)
+@app.get("/exceptions")
+def exceptions_moved():
+    """Exceptions are shown on Today ("Needs your judgment"); the old tab forwards there."""
+    return RedirectResponse("/", status_code=303)
 
 
 @app.get("/sku/{run_id}/{sku_id}", response_class=HTMLResponse)
@@ -335,21 +330,20 @@ def sku_detail(request: Request, run_id: int, sku_id: str):
 @app.post("/sku/{run_id}/{sku_id}")
 def decide(request: Request, run_id: int, sku_id: str, decision: str = Form(...),
            final_qty: str = Form(""), reason: str = Form(""), who: str = Form(""), next: str = Form("")):
-    """Approve needs no typed reason (it is recorded as "Approved as recommended").
-    Changing a quantity always needs a reason."""
+    """A reason is optional. A blank one is logged as "Approved as recommended"
+    or "Quantity changed (no reason given)"."""
     qty = int(final_qty) if final_qty.strip().lstrip("-").isdigit() else None
     if decision == "APPROVED" and not reason.strip():
         reason = APPROVE_REASON
     if decision == "CHANGED" and not reason.strip():
-        reason = ""  # add_override rejects it with a clear message
+        reason = CHANGE_REASON
     try:
         user = actor(request, who)
         get_store().add_override(run_id, sku_id, decision, qty, reason, user)
     except ValueError as exc:
-        msg = "Please give a reason for changing the quantity." if "reason" in str(exc).lower() else str(exc)
-        return back(_safe_next(next, f"/sku/{run_id}/{sku_id}"), err=f"{sku_id}: {msg}")
+        return back(_safe_next(next, f"/sku/{run_id}/{sku_id}"), err=f"{sku_id}: {exc}")
     rec = get_store().recommendation(run_id, sku_id)
-    default = "/exceptions" if rec["status"] == "EXCEPTION" else "/recommendations"
+    default = "/" if rec["status"] == "EXCEPTION" else "/recommendations"
     return remember(back(_safe_next(next, default), msg=f"Saved your decision for {sku_id}."), user)
 
 

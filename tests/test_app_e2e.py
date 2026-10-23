@@ -28,7 +28,7 @@ def client(raw, monkeypatch):
 def test_pages_require_login_when_auth_on(monkeypatch):
     monkeypatch.setenv("AUTH_REQUIRED", "true")
     c = TestClient(app)
-    for path in ["/", "/recommendations", "/exceptions", "/decisions", "/runs", "/settings"]:
+    for path in ["/", "/recommendations", "/decisions", "/analytics", "/runs", "/settings"]:
         r = c.get(path, follow_redirects=False)
         assert r.status_code == 303 and r.headers["location"].startswith("/login"), path
     assert c.post("/runs/new", follow_redirects=False).status_code == 303
@@ -42,7 +42,7 @@ def open_client(raw):
 
 
 def test_pages_open_without_login(open_client):
-    for path in ["/", "/recommendations", "/exceptions", "/decisions", "/runs", "/settings", "/sku/1/SKU001"]:
+    for path in ["/", "/recommendations", "/decisions", "/analytics", "/runs", "/settings", "/sku/1/SKU001"]:
         r = open_client.get(path, follow_redirects=False)
         assert r.status_code == 200, path
     assert "Who is reviewing?" in open_client.get("/").text
@@ -72,7 +72,7 @@ def test_wrong_password_rejected(client):
 
 def test_every_page_loads(client):
     for path in ["/", "/recommendations", "/recommendations?show=todo", "/recommendations?status=STOCKOUT_RISK",
-                 "/exceptions", "/decisions", "/runs", "/settings", "/sku/1/SKU001", "/judgment-log.md", "/health"]:
+                 "/decisions", "/analytics", "/runs", "/settings", "/sku/1/SKU001", "/judgment-log.md", "/health"]:
         r = client.get(path)
         assert r.status_code == 200, path
     home = client.get("/").text
@@ -82,8 +82,6 @@ def test_every_page_loads(client):
 
 
 def test_override_round_trip_and_delete(client):
-    r = client.post("/sku/1/SKU003", data={"decision": "CHANGED", "final_qty": "420", "reason": ""})
-    assert "required" in r.text  # reason is mandatory
     r = client.post("/sku/1/SKU003", data={"decision": "CHANGED", "final_qty": "420",
                                             "reason": "HTTP test override"})
     assert "Saved your decision for SKU003" in r.text
@@ -171,12 +169,23 @@ def test_one_click_approve_and_undo(client):
     assert "0 of 15 done" in r.text
 
 
-def test_change_needs_a_reason(client):
+def test_change_reason_is_optional(client):
     r = client.post("/sku/1/SKU003", data={"decision": "CHANGED", "final_qty": "400", "next": "/"})
-    assert "Please give a reason for changing the quantity." in r.text
-    assert "SKU003" not in get_store().latest_decisions(1)
-    r = client.post("/sku/1/SKU003", data={"decision": "CHANGED", "final_qty": "400", "reason": "Promo", "next": "/"})
-    assert "Changed to 400 units" in r.text
+    assert "Saved your decision for SKU003" in r.text and "Changed to 400 units" in r.text
+    d = get_store().latest_decisions(1)["SKU003"]
+    assert d["final_qty"] == 400 and d["reason"] == "Quantity changed (no reason given)"
+    r = client.post("/sku/1/SKU013", data={"decision": "CHANGED", "final_qty": "90", "reason": "Promo", "next": "/"})
+    assert get_store().latest_decisions(1)["SKU013"]["reason"] == "Promo"
+
+
+def test_menu_has_no_exceptions_or_runs_tab(client):
+    home = client.get("/").text
+    nav = home[home.index("<nav>"):home.index("</nav>")]
+    assert "Exceptions" not in nav and "Runs" not in nav
+    for tab in ("Today", "Recommendations", "Decisions", "Analytics", "Settings"):
+        assert tab in nav
+    r = client.get("/exceptions", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/"
 
 
 def test_approve_all_from_landing_page_needs_no_reason(client):
