@@ -14,6 +14,7 @@ RUN_DATE = date(2026, 10, 22)
 def isolated_env(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{(tmp_path / 'test.db').as_posix()}")
     monkeypatch.setenv("FRESHROOTS_VAR_DIR", str(tmp_path / "var"))
+    monkeypatch.setenv("JUDGMENT_LOG_PATH", str(tmp_path / "judgment_log.md"))
     for name in ("RESEND_API_KEY", "EMAIL_PROVIDER", "ANTHROPIC_API_KEY", "SMTP_HOST", "DATA_SOURCE_URL",
                  "DASHBOARD_USERS", "VERCEL", "NEON_API_KEY", "VERCEL_TOKEN"):
         monkeypatch.setenv(name, "")

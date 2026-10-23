@@ -2,6 +2,9 @@
 overrides (Raghav's undocumented logic) is written down over time."""
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 from src.settings import ROOT
 
 
@@ -26,9 +29,10 @@ def judgment_log_markdown(store) -> str:
 
 def export_judgment_log(store) -> str:
     text = judgment_log_markdown(store)
+    path = Path(os.environ.get("JUDGMENT_LOG_PATH") or ROOT / "docs" / "judgment_log.md")
     try:
-        (ROOT / "docs").mkdir(exist_ok=True)
-        (ROOT / "docs" / "judgment_log.md").write_text(text, encoding="utf-8")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
     except OSError:
         pass  # read-only filesystem (Vercel): the dashboard serves the same file on demand
     return text
