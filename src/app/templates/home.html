@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "_macros.html" import run_line %}
+{% block content %}
+<h1>Hello {{ user|capitalize }}</h1>
+{% if not run %}
+  <p class="sub">No plan has been made yet.</p>
+  <form method="post" action="/runs/new"><button class="btn">Make a plan now</button></form>
+{% else %}
+  <p class="sub">{{ run_line(run, uplift_pct) }}</p>
+  {% if last_any and last_any.status == 'FAILED' and last_any.id != run.id %}
+    <div class="err">The latest run (#{{ last_any.id }}) failed. You are seeing the last good plan. <a href="/runs">See details</a></div>
+  {% endif %}
+  {% for w in run.warnings %}<div class="warn">⚠ {{ w }}</div>{% endfor %}
+
+  <div class="card" style="margin-bottom:18px">
+    {% if todo|length == 0 %}
+      <h2 style="margin-top:0">All {{ run.counts.TOTAL }} SKUs are fine. Nothing to do.</h2>
+    {% elif decided == todo|length %}
+      <h2 style="margin-top:0">✓ All {{ todo|length }} SKUs are reviewed.</h2>
+      <p class="muted">The decisions are saved on the Decisions page.</p>
+    {% else %}
+      <h2 style="margin-top:0">{{ todo|length - decided }} of {{ todo|length }} SKUs are waiting for your review</h2>
+      <p class="muted">Check each suggestion, then approve it or change the quantity.</p>
+    {% endif %}
+    <div class="actions" style="margin-bottom:0">
+      {% if decided < todo|length %}<a class="btn" href="/recommendations?show=todo">Start review →</a>{% endif %}
+      <a class="btn light" href="/runs/{{ run.id }}/workbook">Download Excel</a>
+    </div>
+  </div>
+
+  <div class="grid">
+    <a class="stat red" href="/recommendations?status=STOCKOUT_RISK"><b>{{ run.counts.STOCKOUT_RISK }}</b>Reorder now</a>
+    <a class="stat blue" href="/recommendations?status=HIGH_DEMAND"><b>{{ run.counts.HIGH_DEMAND }}</b>Demand rising</a>
+    <a class="stat amber" href="/recommendations?status=OVERSTOCK_RISK"><b>{{ run.counts.OVERSTOCK_RISK }}</b>Pause order</a>
+    <a class="stat purple" href="/exceptions"><b>{{ run.counts.EXCEPTION }}</b>Needs judgment</a>
+    <a class="stat green" href="/recommendations?status=OK"><b>{{ run.counts.OK }}</b>OK, no action</a>
+  </div>
+  <p class="muted" style="margin-top:18px">Plans are made automatically every Monday and Thursday at 6:00 am (India time).</p>
+{% endif %}
+{% endblock %}

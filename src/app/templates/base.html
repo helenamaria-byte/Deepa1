@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Freshroots Planning{% endblock %}</title>
+<style>
+  :root {
+    --bg: #f5f7f4; --card: #ffffff; --ink: #1c2a20; --muted: #5d6b60; --line: #e1e7de;
+    --brand: #1f5130; --brand-ink: #ffffff;
+    --red: #b42318; --red-bg: #fdecea; --amber: #a15c00; --amber-bg: #fff3dc;
+    --blue: #1d4f91; --blue-bg: #e7effb; --purple: #5b3a9a; --purple-bg: #efe9fa;
+    --green: #22703b; --green-bg: #e5f4e8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; }
+  a { color: var(--brand); }
+  header { background: var(--brand); color: var(--brand-ink); }
+  .bar { max-width: 1120px; margin: 0 auto; padding: 0 16px; display: flex; align-items: center;
+         gap: 6px; flex-wrap: wrap; min-height: 56px; }
+  .logo { font-weight: 700; font-size: 17px; margin-right: 18px; color: #fff; text-decoration: none; }
+  nav a { color: #dcebdf; text-decoration: none; padding: 8px 12px; border-radius: 6px; font-weight: 500; }
+  nav a:hover, nav a.on { background: rgba(255,255,255,.14); color: #fff; }
+  .who { margin-left: auto; font-size: 14px; color: #dcebdf; }
+  .who a { color: #fff; margin-left: 10px; }
+  main { max-width: 1120px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 18px; margin: 28px 0 10px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+  .stat { display: block; text-decoration: none; color: inherit; border-radius: 12px; padding: 18px;
+          border: 1px solid var(--line); background: var(--card); }
+  .stat b { display: block; font-size: 34px; line-height: 1.1; }
+  .stat:hover { border-color: var(--brand); }
+  .stat.red { background: var(--red-bg); } .stat.amber { background: var(--amber-bg); }
+  .stat.blue { background: var(--blue-bg); } .stat.purple { background: var(--purple-bg); }
+  .stat.green { background: var(--green-bg); }
+  .btn { display: inline-block; border: 0; border-radius: 8px; padding: 10px 18px; font: inherit;
+         font-weight: 600; cursor: pointer; text-decoration: none; background: var(--brand); color: #fff; }
+  .btn.light { background: #fff; color: var(--brand); border: 1px solid var(--brand); }
+  .btn.small { padding: 6px 12px; font-size: 14px; }
+  .btn.danger { background: #fff; color: var(--red); border: 1px solid var(--red); }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0; }
+  .badge { display: inline-block; border-radius: 999px; padding: 2px 10px; font-size: 13px; font-weight: 600;
+           white-space: nowrap; }
+  .badge.red { background: var(--red-bg); color: var(--red); }
+  .badge.amber { background: var(--amber-bg); color: var(--amber); }
+  .badge.blue { background: var(--blue-bg); color: var(--blue); }
+  .badge.purple { background: var(--purple-bg); color: var(--purple); }
+  .badge.green { background: var(--green-bg); color: var(--green); }
+  .badge.grey { background: #eceeed; color: var(--muted); }
+  .tablewrap { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 13px; color: var(--muted); font-weight: 600; padding: 12px;
+       border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  .muted { color: var(--muted); font-size: 14px; }
+  .why { max-width: 420px; font-size: 14px; }
+  .msg { background: var(--green-bg); color: var(--green); padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; }
+  .err { background: var(--red-bg); color: var(--red); padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; }
+  .warn { background: var(--amber-bg); color: var(--amber); padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; }
+  form.filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-bottom: 16px; }
+  label { display: block; font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  select, input[type=text], input[type=number], input[type=password], textarea {
+    font: inherit; padding: 9px 10px; border: 1px solid #c9d2c6; border-radius: 8px; background: #fff;
+    width: 100%; max-width: 100%; }
+  textarea { min-height: 80px; }
+  .choice { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 10px;
+            padding: 14px; margin-bottom: 10px; cursor: pointer; font-weight: 400; font-size: 15px; }
+  .choice:has(input:checked) { border-color: var(--brand); background: #f0f6f1; }
+  .choice input { margin-top: 4px; }
+  .kv { display: grid; grid-template-columns: 200px 1fr; gap: 6px 16px; }
+  .kv div:nth-child(odd) { color: var(--muted); }
+  details summary { cursor: pointer; color: var(--brand); }
+  pre { white-space: pre-wrap; font-size: 12px; background: #f3f4f2; padding: 10px; border-radius: 8px; }
+  @media (max-width: 640px) { .kv { grid-template-columns: 1fr; } h1 { font-size: 22px; } }
+</style>
+</head>
+<body>
+{% if user %}
+<header><div class="bar">
+  <a class="logo" href="/">Freshroots Planning</a>
+  <nav>
+    {% set here = request.url.path %}
+    <a href="/" class="{{ 'on' if here == '/' }}">Home</a>
+    <a href="/recommendations" class="{{ 'on' if here.startswith('/recommendations') }}">Recommendations</a>
+    <a href="/exceptions" class="{{ 'on' if here.startswith('/exceptions') }}">Exceptions</a>
+    <a href="/decisions" class="{{ 'on' if here.startswith('/decisions') }}">Decisions</a>
+    <a href="/runs" class="{{ 'on' if here.startswith('/runs') }}">Runs</a>
+    <a href="/settings" class="{{ 'on' if here.startswith('/settings') }}">Settings</a>
+  </nav>
+  <span class="who">{{ user }}<a href="/logout">Log out</a></span>
+</div></header>
+{% endif %}
+<main>
+  {% if msg %}<div class="msg">{{ msg }}</div>{% endif %}
+  {% if err %}<div class="err">{{ err }}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{% macro status_badge(status) -%}
+{%- set s = STATUS_LABELS.get(status, (status, 'grey')) -%}
+<span class="badge {{ s[1] }}">{{ s[0] }}</span>
+{%- endmacro %}
+
+{% macro qty(value) -%}{{ '—' if value is none else '{:,}'.format(value) }}{%- endmacro %}
+
+{% macro decision_cell(r) -%}
+{%- if r.decision -%}
+  {%- if r.decision.decision == 'APPROVED' -%}
+    <span class="badge green">✓ Approved</span>
+  {%- else -%}
+    <span class="badge blue">Changed to {{ qty(r.decision.final_qty) }}</span>
+  {%- endif %}
+  <div class="muted">by {{ r.decision.username }}</div>
+{%- elif r.status == 'OK' -%}
+  <span class="muted">Nothing to do</span>
+{%- else -%}
+  <a class="btn small" href="/sku/{{ r.run_id }}/{{ r.sku_id }}">Review</a>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro run_line(run, uplift_pct=25) -%}
+Plan for <b>{{ run.run_date.strftime('%a %d %b %Y') }}</b> · sales up to {{ run.data_week }}
+{%- if run.festival %} · festival month (demand +{{ uplift_pct }}%){% endif %}
+{%- endmacro %}

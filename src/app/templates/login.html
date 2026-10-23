@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Log in · Freshroots Planning{% endblock %}
+{% block content %}
+<div class="card" style="max-width:400px;margin:60px auto">
+  <h1>Freshroots Planning</h1>
+  <p class="sub">Log in to review this week's stock plan.</p>
+  <form method="post" action="/login">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label for="u">Username</label>
+    <input id="u" type="text" name="username" autocomplete="username" required autofocus>
+    <div style="height:12px"></div>
+    <label for="p">Password</label>
+    <input id="p" type="password" name="password" autocomplete="current-password" required>
+    <div style="height:18px"></div>
+    <button class="btn" type="submit" style="width:100%">Log in</button>
+  </form>
+</div>
+{% endblock %}

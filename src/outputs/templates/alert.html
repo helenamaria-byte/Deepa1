@@ -1,0 +1,29 @@
+{% extends "_base.html" %}
+{% block body %}
+<h1 style="font-size:22px;margin:0 0 8px">{{ need_review }} SKUs need review</h1>
+<p style="margin:0 0 16px;color:#3d4a40">Plan for {{ run.run_date }} (sales up to {{ run.data_week }}{% if run.festival %}, festival month: +{{ uplift_pct }}% demand{% endif %}).</p>
+<table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:14px">
+  <tr>
+    <td style="padding:10px;background:#fdecea;border-radius:6px"><b style="font-size:20px">{{ counts.get('STOCKOUT_RISK', 0) }}</b><br>Reorder now</td>
+    <td style="padding:10px;background:#fff4e0"><b style="font-size:20px">{{ counts.get('OVERSTOCK_RISK', 0) }}</b><br>Pause order</td>
+    <td style="padding:10px;background:#e8f0fb"><b style="font-size:20px">{{ counts.get('HIGH_DEMAND', 0) }}</b><br>Demand rising</td>
+    <td style="padding:10px;background:#f1ecf9"><b style="font-size:20px">{{ counts.get('EXCEPTION', 0) }}</b><br>Needs judgment</td>
+  </tr>
+</table>
+{% if rows %}
+<table style="width:100%;border-collapse:collapse;font-size:13px">
+  <tr style="text-align:left;color:#5b6b5e"><th style="padding:6px 4px">SKU</th><th>Action</th><th>Qty</th><th>Why</th></tr>
+  {% for r in rows %}
+  <tr style="border-top:1px solid #e6ebe4;vertical-align:top">
+    <td style="padding:6px 4px"><b>{{ r.sku_id }}</b><br>{{ r.sku_name }}</td>
+    <td style="padding:6px 4px">{{ r.action }}</td>
+    <td style="padding:6px 4px">{{ r.recommended_qty if r.recommended_qty is not none else '—' }}</td>
+    <td style="padding:6px 4px">{{ r.explanation }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% for w in run.warnings %}<p style="background:#fff4e0;padding:8px;border-radius:6px;font-size:13px">⚠ {{ w }}</p>{% endfor %}
+<p style="margin:20px 0"><a href="{{ app_url }}/review" style="background:#1f5130;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">Open the review page</a></p>
+<p style="font-size:13px;color:#5b6b5e">The full plan is attached as an Excel file.</p>
+{% endblock %}

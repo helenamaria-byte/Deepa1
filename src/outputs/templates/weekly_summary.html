@@ -1,0 +1,22 @@
+{% extends "_base.html" %}
+{% block body %}
+<h1 style="font-size:22px;margin:0 0 8px">Weekly planning summary</h1>
+<p style="margin:0 0 16px;color:#3d4a40">{{ start }} to {{ end }}</p>
+<table style="width:100%;border-collapse:collapse;font-size:14px">
+  <tr><td style="padding:6px 0">Planning runs</td><td><b>{{ m.runs }}</b> ({{ m.failed }} failed)</td></tr>
+  <tr><td style="padding:6px 0">SKUs flagged for action (latest run)</td><td><b>{{ m.flagged }}</b> of {{ m.skus }}</td></tr>
+  <tr><td style="padding:6px 0">Sent to the exception queue (latest run)</td><td><b>{{ m.exceptions }}</b> ({{ m.exception_pct }}%)</td></tr>
+  <tr><td style="padding:6px 0">Decisions recorded</td><td><b>{{ m.decisions }}</b></td></tr>
+  <tr><td style="padding:6px 0">Recommendations accepted as-is</td><td><b>{{ m.approved }}</b></td></tr>
+  <tr><td style="padding:6px 0">Recommendations changed</td><td><b>{{ m.changed }}</b></td></tr>
+</table>
+{% if m.by_status %}
+<h2 style="font-size:16px;margin:20px 0 6px">Latest run by status</h2>
+<ul style="margin:0;padding-left:18px">{% for k, v in m.by_status.items() %}<li>{{ k }}: {{ v }}</li>{% endfor %}</ul>
+{% endif %}
+{% if m.reasons %}
+<h2 style="font-size:16px;margin:20px 0 6px">Why recommendations were changed</h2>
+<ul style="margin:0;padding-left:18px">{% for r in m.reasons %}<li>{{ r.sku_id }}: {{ r.reason }} ({{ r.username }})</li>{% endfor %}</ul>
+{% endif %}
+<p style="margin:20px 0"><a href="{{ app_url }}/" style="background:#1f5130;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">Open the dashboard</a></p>
+{% endblock %}

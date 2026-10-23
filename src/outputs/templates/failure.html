@@ -1,0 +1,8 @@
+{% extends "_base.html" %}
+{% block body %}
+<h1 style="font-size:22px;margin:0 0 8px;color:#a12a1f">Planning run failed</h1>
+<p>The run for <b>{{ run_date }}</b> (run #{{ run_id }}) failed after {{ attempts }} attempts, so no new recommendations were produced.</p>
+<p style="background:#fdecea;padding:10px;border-radius:6px;font-family:Consolas,monospace;font-size:12px;white-space:pre-wrap">{{ error }}</p>
+<p>The previous successful plan is still on the dashboard. The IT team can see the full error on the Runs page.</p>
+<p style="margin:20px 0"><a href="{{ app_url }}/runs" style="background:#1f5130;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">Open the Runs page</a></p>
+{% endblock %}

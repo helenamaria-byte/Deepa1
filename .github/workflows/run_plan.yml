@@ -1,0 +1,30 @@
+# Backup scheduler. The primary schedule is Vercel Cron (vercel.json), which calls
+# /api/cron/run at the same time. This workflow only runs on schedule when the
+# repository variable USE_GITHUB_SCHEDULER is "true" (so the plan never runs twice),
+# and can always be started by hand from the Actions tab.
+name: Run demand plan
+on:
+  schedule:
+    - cron: "30 0 * * 1,4"   # 00:30 UTC = 06:00 IST, Monday and Thursday
+  workflow_dispatch:
+jobs:
+  run:
+    if: github.event_name == 'workflow_dispatch' || vars.USE_GITHUB_SCHEDULER == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Run plan
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM }}
+          EMAIL_TO_RAGHAV: ${{ vars.EMAIL_TO_RAGHAV }}
+          EMAIL_TO_PROCUREMENT: ${{ vars.EMAIL_TO_PROCUREMENT }}
+          EMAIL_TO_DEEPA: ${{ vars.EMAIL_TO_DEEPA }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          APP_URL: ${{ vars.APP_URL }}
+        run: python -m src.jobs.run_plan --trigger github-actions

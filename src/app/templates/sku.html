@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge, qty %}
+{% block content %}
+<p><a href="{{ '/exceptions' if r.status == 'EXCEPTION' else '/recommendations' }}">← Back</a></p>
+<h1>{{ r.sku_id }} · {{ r.sku_name }}</h1>
+<p class="sub">{{ status_badge(r.status) }} &nbsp;{{ r.distributor_name }}{% if r.category %} · {{ r.category }}{% endif %}{% if r.perishable %} · perishable{% endif %}</p>
+
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+  <div class="card">
+    <h2 style="margin-top:0">Your decision</h2>
+    <form method="post">
+      {% if r.status != 'EXCEPTION' %}
+      <label class="choice"><input type="radio" name="decision" value="APPROVED" checked>
+        <span><b>Approve the suggestion</b><br>
+        {% if r.recommended_qty is none %}No order needed{% elif r.recommended_qty == 0 %}Pause the next order{% else %}Order {{ qty(r.recommended_qty) }} units{% endif %}</span></label>
+      {% endif %}
+      <label class="choice"><input type="radio" name="decision" value="CHANGED" {{ 'checked' if r.status == 'EXCEPTION' }}>
+        <span><b>{{ 'Set the order quantity' if r.status == 'EXCEPTION' else 'Change the quantity' }}</b><br>
+        <input type="number" name="final_qty" min="0" step="1" placeholder="Units to order (0 = no order)" style="margin-top:6px"
+               onfocus="this.closest('label').querySelector('input[type=radio]').checked=true"></span></label>
+      <label for="reason" style="margin-top:12px">Reason (required)</label>
+      <textarea id="reason" name="reason" required placeholder="e.g. Distributor confirmed a promotion next week"></textarea>
+      <div style="height:12px"></div>
+      <button class="btn">Save decision</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Why</h2>
+    <p>{{ r.explanation }}</p>
+    {% for code, text in r.reasons %}<div><span class="badge purple">{{ code }}</span> {{ text }}</div>{% endfor %}
+    <h2>The numbers</h2>
+    <div class="kv">
+      <div>Stock on hand</div><div>{{ qty(r.on_hand|int if r.on_hand is not none else none) }} units{% if r.inventory_as_of %} <span class="muted">(as of {{ r.inventory_as_of }})</span>{% endif %}</div>
+      <div>Weeks of stock</div><div>{{ r.cover_weeks if r.cover_weeks is not none else '—' }} <span class="muted">(target {{ r.min_cover|int }}–{{ r.max_cover|int }})</span></div>
+      <div>Avg sales, last 4 weeks</div><div>{{ r.avg4 if r.avg4 is not none else '—' }}</div>
+      <div>Avg sales, last 12 weeks</div><div>{{ r.avg12 if r.avg12 is not none else '—' }}</div>
+      <div>Weekly demand used</div><div>{{ r.weekly_demand if r.weekly_demand is not none else '—' }}{% if run.festival %} <span class="muted">(includes festival uplift)</span>{% endif %}</div>
+      <div>Standard order</div><div>{{ qty(r.standard_qty|int if r.standard_qty is not none else none) }}</div>
+      <div>Sales history</div><div>{{ r.history_weeks }} weeks</div>
+    </div>
+  </div>
+</div>
+
+{% if history %}
+<h2>Earlier decisions for this SKU</h2>
+<div class="tablewrap"><table>
+  <tr><th>When (UTC)</th><th>Decision</th><th>Qty</th><th>Reason</th><th>By</th></tr>
+  {% for o in history %}<tr><td>{{ o.created_at.strftime('%d %b %H:%M') }}</td><td>{{ 'Approved' if o.decision == 'APPROVED' else 'Changed' }}</td>
+  <td>{{ qty(o.final_qty) }}</td><td>{{ o.reason }}</td><td>{{ o.username }}</td></tr>{% endfor %}
+</table></div>
+{% endif %}
+{% endblock %}

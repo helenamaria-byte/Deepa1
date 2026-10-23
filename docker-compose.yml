@@ -1,0 +1,18 @@
+# Self-hosted alternative to Vercel. The production deployment runs on Vercel
+# (see vercel.json); this file runs the same app and schedule anywhere Docker runs.
+services:
+  dashboard:
+    build: .
+    env_file: .env
+    ports: ["8000:8000"]
+    volumes: ["./var:/app/var"]
+  scheduler:
+    build: .
+    env_file: .env
+    volumes: ["./var:/app/var"]
+    # Mon & Thu 06:00 IST plan run, Fri 06:00 IST weekly summary (TZ set to India time).
+    environment: [TZ=Asia/Kolkata]
+    command: >
+      sh -c "apt-get update -qq && apt-get install -y -qq cron >/dev/null &&
+             printf 'SHELL=/bin/sh\n0 6 * * 1,4 cd /app && python -m src.jobs.run_plan --trigger schedule >> /proc/1/fd/1 2>&1\n0 6 * * 5 cd /app && python -m src.jobs.weekly_summary >> /proc/1/fd/1 2>&1\n' > /etc/cron.d/plan &&
+             chmod 0644 /etc/cron.d/plan && crontab /etc/cron.d/plan && printenv > /etc/environment && cron -f"

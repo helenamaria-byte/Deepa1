@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Settings</h1>
+<p class="sub">The planning rules (version {{ version }}). Saving creates a new version, and it applies from the next run.</p>
+
+<form method="post" class="card">
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
+    {% for name, label, help, value in fields %}
+    <div>
+      {% if value is sameas true or value is sameas false %}
+        <label><input type="checkbox" name="{{ name }}" {{ 'checked' if value }}> {{ label }}</label>
+      {% else %}
+        <label for="{{ name }}">{{ label }}</label>
+        <input id="{{ name }}" type="number" step="any" name="{{ name }}" value="{{ value }}" required>
+      {% endif %}
+      <div class="muted">{{ help }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div style="height:16px"></div>
+  <label for="note">What changed and why</label>
+  <input id="note" type="text" name="note" placeholder="e.g. Raised perishable maximum after the October review">
+  <div style="height:14px"></div>
+  <button class="btn">Save as new version</button>
+</form>
+
+<h2>Version history</h2>
+<div class="tablewrap"><table>
+  <tr><th>Version</th><th>When (UTC)</th><th>By</th><th>Note</th></tr>
+  {% for v in history %}
+  <tr><td>v{{ v.id }}</td><td>{{ v.created_at.strftime('%d %b %Y %H:%M') }}</td><td>{{ v.created_by }}</td><td>{{ v.note }}</td></tr>
+  {% endfor %}
+</table></div>
+
+<details style="margin-top:18px"><summary>Show the full rules file</summary><pre>{{ rules_yaml }}</pre></details>
+{% endblock %}

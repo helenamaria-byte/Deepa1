@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Runs</h1>
+<p class="sub">Every planning run, newest first. Plans run automatically every Monday and Thursday at 6:00 am (India time).</p>
+<form method="post" action="/runs/new" class="actions"><button class="btn">Run the plan now</button></form>
+
+<div class="tablewrap"><table>
+  <tr><th>Run</th><th>Date</th><th>Result</th><th>Started by</th><th>Sales up to</th><th>Rules</th><th>Summary</th><th></th></tr>
+  {% for r in runs %}
+  <tr>
+    <td>#{{ r.id }}{% if r.seq > 1 %}<div class="muted">rerun {{ r.seq }}</div>{% endif %}</td>
+    <td>{{ r.run_date.strftime('%d %b %Y') }}<div class="muted">{{ r.started_at.strftime('%H:%M') }} UTC</div></td>
+    <td>{% if r.status == 'SUCCESS' %}<span class="badge green">Success</span>{% elif r.status == 'FAILED' %}<span class="badge red">Failed</span>{% else %}<span class="badge grey">{{ r.status|capitalize }}</span>{% endif %}</td>
+    <td>{{ r.trigger }}</td>
+    <td>{{ r.data_week or '—' }}</td>
+    <td>{{ 'v' ~ r.rules_version if r.rules_version else '—' }}</td>
+    <td>{% if r.counts %}{{ r.counts.NEED_REVIEW }} need review of {{ r.counts.TOTAL }}{% endif %}
+        {% for w in r.warnings %}<div class="muted">⚠ {{ w }}</div>{% endfor %}
+        {% if r.error %}<details><summary>Error details</summary><pre>{{ r.error }}</pre></details>{% endif %}</td>
+    <td>{% if r.status == 'SUCCESS' %}<a href="/recommendations?run={{ r.id }}">View</a> · <a href="/runs/{{ r.id }}/workbook">Excel</a>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="8" class="muted">No runs yet.</td></tr>
+  {% endfor %}
+</table></div>
+
+<h2>Emails</h2>
+<div class="tablewrap"><table>
+  <tr><th>When (UTC)</th><th>Type</th><th>To</th><th>Subject</th><th>Result</th></tr>
+  {% for e in emails %}
+  <tr>
+    <td>{{ e.created_at.strftime('%d %b %H:%M') }}</td>
+    <td>{{ e.kind|replace('_', ' ') }}</td>
+    <td>{{ e.recipients or '—' }}</td>
+    <td>{% if e.html %}<a href="/emails/{{ e.id }}" target="_blank">{{ e.subject }}</a>{% else %}{{ e.subject }}{% endif %}</td>
+    <td>{% if e.status == 'SENT' %}<span class="badge green">Sent</span>{% elif e.status == 'OUTBOX' %}<span class="badge grey">Saved, not sent</span>{% else %}<span class="badge red">Failed</span>{% endif %}
+        <div class="muted">{{ e.detail }}</div></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5" class="muted">No emails yet.</td></tr>
+  {% endfor %}
+</table></div>
+{% endblock %}

@@ -1,0 +1,37 @@
+# Freshroots demand-planning rules.
+# Every threshold the engine uses lives here. Edits made on the dashboard's
+# Settings page are saved as new versions in the database; this file is the
+# starting version (version 1) and the fallback when no database version exists.
+
+windows:
+  long_weeks: 12          # avg12: mean weekly units over the last N complete weeks
+  short_weeks: 4          # avg4: mean weekly units over the last N complete weeks
+  demand_baseline: long   # weekly_demand is built on avg12 (long). "short" uses avg4 (backtest sensitivity only)
+
+festival:
+  enabled: true           # turn the festival uplift on/off
+  uplift: 1.25            # weekly_demand = avg12 x uplift in festival months (Rule 4)
+  fallback_months: [3, 10, 11]   # used only if the run month is missing from calendar.csv
+
+high_demand:              # Rule 1
+  ratio: 1.20             # avg4 > ratio x avg12  -> HIGH_DEMAND
+  reorder_multiplier: 1.5 # recommend multiplier x Standard_Reorder_Qty
+
+cover:
+  general:                # Rules 2 and 3
+    min_weeks: 6          # cover < min -> STOCKOUT_RISK, reorder Standard_Reorder_Qty
+    max_weeks: 14         # cover > max -> OVERSTOCK_RISK, pause next order (qty 0)
+  perishable:             # Rule 5 (replaces the general window)
+    min_weeks: 3
+    max_weeks: 4
+  perishable_values: [High]   # sku_master.Perishability values treated as perishable
+
+exceptions:               # SKUs that go to the review queue with no auto-recommendation
+  min_history_weeks: 12       # fewer weeks of sales history -> NEW_LAUNCH
+  max_deviation: 0.40         # |avg4 / avg12 - 1| above this -> VOLATILE_DEMAND
+  zero_sales_lookback_weeks: 12   # any zero-sales week in this window -> ZERO_SALES_WEEK
+  stale_inventory_days: 10    # inventory older than this -> STALE_INVENTORY
+  active_status: Active       # distributor status other than this -> INACTIVE_DISTRIBUTOR
+
+rounding:
+  cover_decimals: 2
