@@ -81,6 +81,12 @@
   .kv div:nth-child(odd) { color: var(--muted); }
   details summary { cursor: pointer; color: var(--link); }
   pre { white-space: pre-wrap; font-size: 12px; background: var(--field); padding: 10px; border-radius: 8px; }
+  .acts { display: flex; flex-direction: column; gap: 8px; }
+  .acts form.inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0; }
+  details.change summary { list-style: none; display: inline-block; cursor: pointer; color: var(--link); font-weight: 600; font-size: 14px; }
+  details.change summary::-webkit-details-marker { display: none; }
+  details.change[open] summary { margin-bottom: 8px; }
+  details.change form { display: grid; gap: 8px; min-width: 200px; }
   @media (max-width: 640px) { .kv { grid-template-columns: 1fr; } h1 { font-size: 22px; } }
 </style>
 </head>

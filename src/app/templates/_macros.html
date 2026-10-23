@@ -13,20 +13,46 @@
 
 {% macro qty(value) -%}{{ '—' if value is none else '{:,}'.format(value) }}{%- endmacro %}
 
-{% macro decision_cell(r) -%}
-{%- if r.decision -%}
-  {%- if r.decision.decision == 'APPROVED' -%}
-    <span class="badge green">✓ Approved</span>
-  {%- else -%}
-    <span class="badge blue">Changed to {{ qty(r.decision.final_qty) }}</span>
-  {%- endif %}
-  <div class="muted">by {{ r.decision.username }}</div>
-{%- elif r.status == 'OK' -%}
-  <span class="muted">Nothing to do</span>
-{%- else -%}
-  <a class="btn small" href="/sku/{{ r.run_id }}/{{ r.sku_id }}">Review</a>
-{%- endif -%}
+{% macro approve_label(r) -%}
+{%- if r.recommended_qty is none -%}Approve: no order
+{%- elif r.recommended_qty == 0 -%}Approve pause
+{%- else -%}Approve {{ qty(r.recommended_qty) }}{%- endif -%}
 {%- endmacro %}
+
+{# Approve / Change / Undo in place, for any SKU. `next` is where to return after saving. #}
+{% macro decide_actions(r, next) -%}
+<div class="acts">
+{%- set d = r.decision -%}
+{%- if d %}
+  <div>{% if d.decision == 'APPROVED' %}<span class="badge green">✓ Approved · {{ 'no order' if d.final_qty is none else (qty(d.final_qty) ~ ' units' if d.final_qty else 'pause') }}</span>
+       {% else %}<span class="badge blue">Changed to {{ qty(d.final_qty) }} units</span>{% endif %}
+    <div class="muted">by {{ d.username }}{% if d.decision == 'CHANGED' %}: “{{ d.reason }}”{% endif %}</div></div>
+  <form method="post" action="/decisions/{{ d.id }}/delete" class="inline">
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="btn small light">Undo</button></form>
+{%- else %}
+  {% if r.status != 'EXCEPTION' %}
+  <form method="post" action="/sku/{{ r.run_id }}/{{ r.sku_id }}" class="inline">
+    <input type="hidden" name="decision" value="APPROVED">
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="btn small">{{ approve_label(r) }}</button>
+  </form>
+  {% endif %}
+  <details class="change" {{ 'open' if r.status == 'EXCEPTION' }}>
+    <summary>{{ 'Set the quantity' if r.status == 'EXCEPTION' else 'Change quantity…' }}</summary>
+    <form method="post" action="/sku/{{ r.run_id }}/{{ r.sku_id }}">
+      <input type="hidden" name="decision" value="CHANGED">
+      <input type="hidden" name="next" value="{{ next }}">
+      <input type="number" name="final_qty" min="0" step="1" required placeholder="Units to order (0 = none)">
+      <input type="text" name="reason" required placeholder="Reason (required)">
+      <button class="btn small">Save</button>
+    </form>
+  </details>
+{%- endif %}
+</div>
+{%- endmacro %}
+
+{% macro decision_cell(r, next) -%}{{ decide_actions(r, next) }}{%- endmacro %}
 
 {% macro run_line(run, uplift_pct=25) -%}
 Plan for <b>{{ run.run_date.strftime('%a %d %b %Y') }}</b> · sales up to {{ run.data_week }}

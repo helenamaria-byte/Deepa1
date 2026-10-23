@@ -73,10 +73,10 @@ def test_status_line_says_what_is_done_and_what_is_due(raw):
     c = TestClient(app)
     home = c.get("/").text
     assert "0 decisions made</b> for the plan of Thu 22 Oct" in home
-    assert "7 decisions left</span>," in home and "when the next plan runs" in home
+    assert "15 decisions left</span>," in home and "when the next plan runs" in home
     c.post("/sku/1/SKU001", data={"decision": "APPROVED", "who": "Raghav"})
     home = c.get("/").text
-    assert "1 decision made</b>" in home and "6 decisions left" in home
+    assert "1 decision made</b>" in home and "14 decisions left" in home
 
 
 def test_next_plan_time_matches_the_schedule():

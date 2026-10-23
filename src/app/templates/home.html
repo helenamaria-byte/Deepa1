@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import run_line, qty %}
+{% from "_macros.html" import run_line, qty, decide_actions %}
 {% block content %}
 <style>
   .top { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end; justify-content:space-between; margin-bottom:18px; }
@@ -11,24 +11,19 @@
   .group .hint { color:var(--muted); margin:0 0 10px; font-size:14px; }
   .dot { width:12px; height:12px; border-radius:50%; display:inline-block; }
   .dot.red { background:var(--red); } .dot.blue { background:var(--blue); }
-  .dot.amber { background:var(--amber); } .dot.purple { background:var(--purple); }
+  .dot.amber { background:var(--amber); } .dot.purple { background:var(--purple); } .dot.green { background:var(--green); }
   .item { display:grid; grid-template-columns: minmax(220px, 2fr) 150px minmax(240px, 1.6fr); gap:16px;
           background:var(--card); border:1px solid var(--line); border-left-width:5px; border-radius:10px;
           padding:14px 16px; margin-bottom:10px; align-items:start; }
   .item.red { border-left-color:var(--red); } .item.blue { border-left-color:var(--blue); }
   .item.amber { border-left-color:var(--amber); } .item.purple { border-left-color:var(--purple); }
+  .item.green { border-left-color:var(--green); }
   .item.done { opacity:.6; }
   .chips { margin-top:6px; display:flex; flex-direction:column; gap:3px; }
   .chip { font-size:13px; color:var(--ink-2); }
   .chip::before { content:"• "; color:var(--muted); }
   .sugg { font-size:13px; color:var(--muted); }
   .sugg b { display:block; font-size:24px; color:var(--ink); line-height:1.2; }
-  .acts { display:flex; flex-direction:column; gap:8px; }
-  .acts form.inline { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:0; }
-  details.change summary { list-style:none; display:inline-block; cursor:pointer; color:var(--brand); font-weight:600; font-size:14px; }
-  details.change summary::-webkit-details-marker { display:none; }
-  details.change[open] summary { margin-bottom:8px; }
-  details.change form { display:grid; gap:8px; }
   .why-txt { font-size:13px; color:var(--muted); margin-top:6px; display:inline-block; }
   .status { border:1px solid var(--line); border-left:4px solid var(--accent); background:var(--card);
             border-radius:12px; padding:16px 20px; margin:4px 0 18px; display:flex; flex-wrap:wrap;
@@ -107,38 +102,12 @@
 
     <div class="sugg">
       {% if r.status == 'EXCEPTION' %}Suggested<b>You decide</b>
+      {% elif r.recommended_qty is none %}Suggested<b>No order</b>stock is in range
       {% elif r.recommended_qty == 0 %}Suggested<b>Pause</b>no order this time
       {% else %}Suggested order<b>{{ qty(r.recommended_qty) }}</b>units{% endif %}
     </div>
 
-    <div class="acts">
-      {% if d %}
-        <div>{% if d.decision == 'APPROVED' %}<span class="badge green">✓ Approved{% if r.recommended_qty %} · {{ qty(d.final_qty) }} units{% endif %}</span>
-             {% else %}<span class="badge blue">Changed to {{ qty(d.final_qty) }} units</span>{% endif %}
-          <div class="muted">by {{ d.username }}{% if d.decision == 'CHANGED' %}: “{{ d.reason }}”{% endif %}</div></div>
-        <form method="post" action="/decisions/{{ d.id }}/delete" class="inline">
-          <input type="hidden" name="next" value="/#{{ r.sku_id }}">
-          <button class="btn small light">Undo</button></form>
-      {% else %}
-        {% if r.status != 'EXCEPTION' %}
-        <form method="post" action="/sku/{{ run.id }}/{{ r.sku_id }}" class="inline">
-          <input type="hidden" name="decision" value="APPROVED">
-          <input type="hidden" name="next" value="/#{{ r.sku_id }}">
-          <button class="btn">{{ 'Approve pause' if r.recommended_qty == 0 else 'Approve ' ~ qty(r.recommended_qty) }}</button>
-        </form>
-        {% endif %}
-        <details class="change" {{ 'open' if r.status == 'EXCEPTION' }}>
-          <summary>{{ 'Set the quantity' if r.status == 'EXCEPTION' else 'Change quantity…' }}</summary>
-          <form method="post" action="/sku/{{ run.id }}/{{ r.sku_id }}">
-            <input type="hidden" name="decision" value="CHANGED">
-            <input type="hidden" name="next" value="/#{{ r.sku_id }}">
-            <input type="number" name="final_qty" min="0" step="1" required placeholder="Units to order (0 = none)">
-            <input type="text" name="reason" required placeholder="Reason (required), e.g. promo next week">
-            <button class="btn small">Save</button>
-          </form>
-        </details>
-      {% endif %}
-    </div>
+    {{ decide_actions(r, '/#' ~ r.sku_id) }}
   </div>
   {% endfor %}
 </section>
@@ -148,26 +117,9 @@
 <form method="post" action="/recommendations/approve-all" class="card" style="margin-top:18px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
   <input type="hidden" name="run_id" value="{{ run.id }}"><input type="hidden" name="next" value="/">
   <div style="flex:1;min-width:220px"><b>Agree with the rest?</b>
-    <div class="muted">Approves the {{ pending_approvable|length }} remaining suggestions above (not the ones that need your judgment).</div></div>
+    <div class="muted">Approves the {{ pending_approvable|length }} SKUs above that are still waiting, including the ones needing no order (not the ones that need your judgment).</div></div>
   <button class="btn">Approve all {{ pending_approvable|length }}</button>
 </form>
-{% endif %}
-
-{% if ok_rows %}
-<details class="card" style="margin-top:26px">
-  <summary style="cursor:pointer"><b>{{ ok_rows|length }} SKUs are fine: no order needed</b> <span class="muted">(click to see them)</span></summary>
-  <div class="tablewrap" style="margin-top:12px;border:0"><table>
-    <tr><th>SKU</th><th>Weeks of stock</th><th>Why it's fine</th><th></th></tr>
-    {% for r in ok_rows %}
-    <tr><td><b>{{ r.sku_id }}</b><div class="muted">{{ r.sku_name }}</div></td>
-        <td>{{ r.cover_weeks }}</td>
-        <td class="why">{{ r.chips|join(' · ') }}</td>
-        <td>{% if r.decision and r.decision.decision == 'CHANGED' %}<span class="badge blue">Changed to {{ qty(r.decision.final_qty) }}</span>
-            {% elif r.decision %}<span class="badge green">✓ Confirmed, no order</span>
-            {% else %}<a href="/sku/{{ run.id }}/{{ r.sku_id }}">Order anyway…</a>{% endif %}</td></tr>
-    {% endfor %}
-  </table></div>
-</details>
 {% endif %}
 
 <details class="card" style="margin-top:14px">

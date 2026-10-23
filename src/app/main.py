@@ -127,7 +127,8 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
 def back(path: str, **params) -> RedirectResponse:
     path, _, fragment = path.partition("#")
     query = urlencode({k: v for k, v in params.items() if v not in (None, "")})
-    url = (f"{path}?{query}" if query else path) + (f"#{fragment}" if fragment else "")
+    sep = "&" if "?" in path else "?"
+    url = (f"{path}{sep}{query}" if query else path) + (f"#{fragment}" if fragment else "")
     return RedirectResponse(url, status_code=303)
 
 
@@ -183,6 +184,7 @@ ACTION_GROUPS = [
     ("HIGH_DEMAND", "Demand rising", "blue", "Sales are climbing, so order more than usual."),
     ("OVERSTOCK_RISK", "Pause the next order", "amber", "There is too much stock, so skip the next order."),
     ("EXCEPTION", "Needs your judgment", "purple", "No automatic suggestion. You decide the quantity."),
+    ("OK", "No order needed", "green", "Stock is within range. Approve to confirm no order, or change it."),
 ]
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -243,12 +245,12 @@ def home(request: Request):
     groups = [{"status": s, "title": t, "color": c, "hint": h, "rows": [r for r in recs if r["status"] == s]}
               for s, t, c, h in ACTION_GROUPS]
     groups = [g for g in groups if g["rows"]]
-    todo = [r for r in recs if r["status"] != "OK"]
+    todo = recs  # every SKU needs a decision, including "no order needed"
     decided = sum(1 for r in todo if r["decision"])
     pending_approvable = [r for r in todo if not r["decision"] and r["status"] != "EXCEPTION"]
     now = now_ist()
     return page(request, "home.html", run=run, last_any=last_any, groups=groups, todo=todo, decided=decided,
-                ok_rows=[r for r in recs if r["status"] == "OK"], pending_approvable=pending_approvable,
+                pending_approvable=pending_approvable,
                 rules_summary=rules_summary(rules), uplift_pct=round((rules.festival.uplift - 1) * 100),
                 now_ist=now, next_run=next_scheduled_run(now))
 
@@ -279,8 +281,8 @@ def recommendations(request: Request, run: int | None = None, status: str = "", 
             if (not status or x["status"] == status)
             and (not distributor or x["distributor_name"] == distributor)
             and (not category or x["category"] == category)
-            and (show != "todo" or (x["status"] != "OK" and not x["decision"]))]
-    pending = [x for x in recs if x["status"] != "OK" and not x["decision"]]
+            and (show != "todo" or not x["decision"])]
+    pending = [x for x in recs if not x["decision"]]
     return page(request, "recommendations.html", run=r, rows=rows, distributors=distributors,
                 categories=categories, f={"status": status, "distributor": distributor, "category": category,
                                           "show": show}, pending=pending)
@@ -298,7 +300,7 @@ def approve_all(request: Request, run_id: int = Form(...), reason: str = Form(""
     run = store.get_run(run_id)
     n = 0
     for r in _with_decisions(run):
-        if r["status"] not in ("OK", "EXCEPTION") and not r["decision"]:
+        if r["status"] != "EXCEPTION" and not r["decision"]:
             store.add_override(run_id, r["sku_id"], "APPROVED", None, reason.strip() or APPROVE_REASON, user)
             n += 1
     return remember(back(target, msg=f"Approved {n} suggestions."), user)
@@ -362,9 +364,10 @@ def analytics(request: Request, sku: str = ""):
         return page(request, "analytics.html", run=None)
     _, rules = store.current_rules()
     recs = _with_decisions(run)
-    todo = [r for r in recs if r["status"] != "OK"]
-    chosen = next((r for r in recs if r["sku_id"] == sku), None) or (todo[0] if todo else recs[0])
-    tiles = [("SKUs in this plan", len(recs)), ("Need a decision", len(todo)),
+    todo = recs
+    chosen = next((r for r in recs if r["sku_id"] == sku), None) or recs[0]
+    tiles = [("SKUs in this plan", len(recs)), ("Need action (order or pause)",
+                                                sum(1 for r in recs if r["status"] != "OK")),
              ("Decisions made", sum(1 for r in todo if r["decision"])),
              ("Units already on order", f"{sum((r.get('on_order') or 0) for r in recs):,.0f}")]
     return page(request, "analytics.html", run=run, recs=recs, chosen=chosen, tiles=tiles,

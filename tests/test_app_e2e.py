@@ -76,7 +76,7 @@ def test_every_page_loads(client):
         r = client.get(path)
         assert r.status_code == 200, path
     home = client.get("/").text
-    assert "0 of 7 done" in home and "Reorder now" in home
+    assert "0 of 15 done" in home and "Reorder now" in home
     rec = client.get("/recommendations?status=STOCKOUT_RISK").text
     assert "SKU001" in rec and "750" in rec and "SKU006" not in rec
 
@@ -97,8 +97,8 @@ def test_override_round_trip_and_delete(client):
 
 def test_approve_all(client):
     r = client.post("/recommendations/approve-all", data={"run_id": "1", "reason": "Reviewed with procurement"})
-    assert "Approved 7 suggestions." in r.text
-    assert "All 7 decisions made" in client.get("/").text
+    assert "Approved 15 suggestions." in r.text
+    assert "All 15 decisions made" in client.get("/").text
 
 
 def test_excel_download_and_upload(client):
@@ -149,8 +149,9 @@ def test_cron_requires_secret(client):
 def test_landing_page_is_raghavs_action_list(client):
     home = client.get("/").text
     # Sections in the order he acts on them; OK SKUs are folded away.
-    assert home.index("Reorder now") < home.index("Pause the next order") < home.index("SKUs are fine")
-    assert "8 SKUs are fine: no order needed" in home
+    assert home.index("Reorder now") < home.index("Pause the next order") < home.index("No order needed")
+    # OK SKUs are a section of their own, each with Approve and Change in place.
+    assert home.count("Approve: no order") == 8 and home.count("Change quantity") == 15
     assert "Approve 750" in home and "Approve pause" in home
     # The rule behind each flag, in plain words with the SKU's own numbers.
     assert "Sales +21% vs 12-week average (trigger: over +20%)" in home
@@ -161,13 +162,13 @@ def test_landing_page_is_raghavs_action_list(client):
 
 def test_one_click_approve_and_undo(client):
     r = client.post("/sku/1/SKU001", data={"decision": "APPROVED", "next": "/#SKU001"})
-    assert "Saved your decision for SKU001" in r.text and "1 of 7 done" in r.text
+    assert "Saved your decision for SKU001" in r.text and "1 of 15 done" in r.text
     d = get_store().latest_decisions(1)["SKU001"]
     assert d["final_qty"] == 750 and d["reason"] == "Approved as recommended"
     oid = re.search(r'/decisions/(\d+)/delete" class="inline">\s*<input type="hidden" name="next" value="/#SKU001"',
                     r.text).group(1)
     r = client.post(f"/decisions/{oid}/delete", data={"next": "/#SKU001"})
-    assert "0 of 7 done" in r.text
+    assert "0 of 15 done" in r.text
 
 
 def test_change_needs_a_reason(client):
@@ -180,4 +181,16 @@ def test_change_needs_a_reason(client):
 
 def test_approve_all_from_landing_page_needs_no_reason(client):
     r = client.post("/recommendations/approve-all", data={"run_id": "1", "next": "/"})
-    assert "Approved 7 suggestions." in r.text and "All 7 decisions made" in r.text
+    assert "Approved 15 suggestions." in r.text and "All 15 decisions made" in r.text
+
+
+def test_ok_sku_can_be_approved_or_changed_in_place(client):
+    r = client.post("/sku/1/SKU002", data={"decision": "APPROVED", "next": "/#SKU002"})
+    assert "✓ Approved · no order" in r.text and "1 of 15 done" in r.text
+    d = get_store().latest_decisions(1)["SKU002"]
+    assert d["decision"] == "APPROVED" and d["final_qty"] is None and d["recommended_qty"] is None
+    r = client.post("/sku/1/SKU005", data={"decision": "CHANGED", "final_qty": "100", "reason": "Diwali promo",
+                                          "next": "/recommendations?status=OK#SKU005"})
+    assert "Saved your decision for SKU005" in r.text and "Changed to 100 units" in r.text
+    rec = client.get("/recommendations?status=OK").text
+    assert "Approve: no order" in rec and "No order" in rec

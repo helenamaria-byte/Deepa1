@@ -64,7 +64,7 @@ def build_workbook(run: dict, recs: list[dict], overrides: list[dict], rules: Ru
              o["reason"], o["username"], o["created_at"].strftime("%Y-%m-%d %H:%M UTC")] for o in overrides]
     # Blank rows for SKUs still awaiting a decision, ready to fill in and upload.
     rows += [[r["sku_id"], r["sku_name"], r["recommended_qty"], None, None, None, None, None]
-             for r in recs if r["status"] != "OK" and r["sku_id"] not in decided]
+             for r in recs if r["sku_id"] not in decided]
     _sheet(wb, "Override log", OVERRIDE_HEADERS, rows)
 
     _sheet(wb, "Rules", ["Rule", "Setting"], [

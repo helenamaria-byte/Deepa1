@@ -34,15 +34,15 @@
 <div class="tablewrap"><table>
   <tr><th>SKU</th><th>Suggestion</th><th>Order qty</th><th>Weeks of stock</th><th>Why</th><th>Your decision</th></tr>
   {% for r in rows %}
-  <tr>
+  <tr id="{{ r.sku_id }}">
     <td><b>{{ r.sku_id }}</b><div class="muted">{{ r.sku_name }}</div>
         <div class="muted">{{ r.distributor_name }}{% if r.perishable %} · perishable{% endif %}</div></td>
     <td>{{ status_badge(r.status) }}</td>
-    <td><b>{{ qty(r.recommended_qty) }}</b></td>
+    <td><b>{{ 'No order' if r.recommended_qty is none else ('Pause' if r.recommended_qty == 0 else qty(r.recommended_qty)) }}</b></td>
     <td>{{ r.cover_weeks }}<div class="muted">target {{ r.min_cover|int }}–{{ r.max_cover|int }}</div>
         {% if r.on_order %}<div class="badge blue" style="margin-top:4px">+{{ qty(r.on_order|int) }} on order</div>{% endif %}</td>
     <td class="why">{{ r.explanation }}</td>
-    <td>{{ decision_cell(r) }}</td>
+    <td style="min-width:220px">{{ decision_cell(r, '/recommendations?' ~ (f|urlencode) ~ '#' ~ r.sku_id) }}</td>
   </tr>
   {% else %}
   <tr><td colspan="6" class="muted">Nothing matches these filters.</td></tr>
@@ -51,7 +51,7 @@
 
 {% if pending %}
 <div class="card" style="margin-top:20px">
-  <h2 style="margin-top:0">Agree with all {{ pending|length }} remaining suggestions?</h2>
+  <h2 style="margin-top:0">Approve all {{ pending|length }} SKUs still waiting?</h2>
   <form method="post" action="/recommendations/approve-all">
     <input type="hidden" name="run_id" value="{{ run.id }}">
     <label for="reason">Note (optional)</label>
