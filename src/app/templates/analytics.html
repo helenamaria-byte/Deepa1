@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% from "_macros.html" import run_line %}
+{% block content %}
+<style>
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin-bottom:18px; }
+  .tile { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .tile .v { font-size:28px; font-weight:600; line-height:1.15; }
+  .tile .l { color:var(--muted); font-size:13px; }
+  .key { display:flex; flex-wrap:wrap; gap:6px 18px; font-size:13px; color:var(--muted); margin:2px 0 8px; }
+  .key .sw { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-1px; margin-right:6px; }
+  .key .ln { display:inline-block; width:14px; height:3px; border-radius:2px; vertical-align:middle; margin-right:6px; }
+  .chart-box { position:relative; }
+  .chart-box .tip { position:absolute; pointer-events:none; background:var(--ink); color:var(--bg); font-size:12px;
+                    padding:4px 8px; border-radius:6px; white-space:nowrap; transform:translate(-50%, -130%); }
+  .card + .card { margin-top:16px; }
+</style>
+
+<h1>Analytics</h1>
+{% if not run %}
+  <p class="sub">No plan has been made yet.</p>
+{% else %}
+<p class="sub">{{ run_line(run) }}</p>
+
+<div class="tiles">
+  {% for label, value in tiles %}<div class="tile"><div class="v">{{ value }}</div><div class="l">{{ label }}</div></div>{% endfor %}
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">Weeks of stock by SKU</h2>
+  <p class="muted" style="margin:0 0 6px">Lowest first. A bar short of its band needs a reorder; a bar past it means too much stock.</p>
+  <div class="key">
+    <span><span class="sw" style="background:{{ CHART.SERIES }}"></span>Stock on hand</span>
+    <span><span class="sw" style="background:{{ CHART.SERIES_DIM }}"></span>Already on order (Zoho)</span>
+    <span><span class="sw" style="background:{{ CHART.BAND }}"></span>Target range for that SKU</span>
+  </div>
+  {{ stock_svg }}
+  <details style="margin-top:10px"><summary>Show as a table</summary>
+    <div class="tablewrap" style="margin-top:8px"><table>
+      <tr><th>SKU</th><th>Weeks of stock</th><th>Target</th><th>On order</th><th>Status</th></tr>
+      {% for r in recs|sort(attribute='cover_weeks') if r.cover_weeks is not none %}
+      <tr><td>{{ r.sku_id }} <span class="muted">{{ r.sku_name }}</span></td><td>{{ r.cover_weeks }}</td>
+          <td>{{ r.min_cover|int }}–{{ r.max_cover|int }}</td><td>{{ '{:,.0f}'.format(r.on_order or 0) }}</td>
+          <td>{{ STATUS_LABELS[r.status][0] }}</td></tr>
+      {% endfor %}
+    </table></div>
+  </details>
+</div>
+
+<div class="card" id="sales">
+  <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;justify-content:space-between">
+    <h2 style="margin:0">Weekly units sold</h2>
+    <form method="get" action="/analytics#sales" style="min-width:260px">
+      <label for="sku">SKU</label>
+      <select id="sku" name="sku" onchange="this.form.submit()">
+        {% for r in recs %}<option value="{{ r.sku_id }}" {{ 'selected' if r.sku_id == chosen.sku_id }}>{{ r.sku_id }} · {{ r.sku_name }}</option>{% endfor %}
+      </select>
+      <noscript><button class="btn small">Show</button></noscript>
+    </form>
+  </div>
+  {% if sales_svg %}
+  <div class="key" style="margin-top:10px">
+    <span><span class="ln" style="background:{{ CHART.SERIES }}"></span>Units sold each week</span>
+    <span><span class="ln" style="background:{{ CHART.AVG_SHORT }}"></span>Average of the last {{ short_weeks }} weeks</span>
+    <span><span class="ln" style="background:{{ CHART.AVG_LONG }}"></span>Average of the last {{ long_weeks }} weeks</span>
+  </div>
+  <div class="chart-box">{{ sales_svg }}<div class="tip" hidden></div></div>
+  <p class="muted" style="margin:6px 0 0">"Demand rising" fires when the {{ short_weeks }}-week line sits more than {{ hd_pct }}% above the {{ long_weeks }}-week line.
+    <a href="/sku/{{ run.id }}/{{ chosen.sku_id }}">Decide on {{ chosen.sku_id }} →</a></p>
+  <details style="margin-top:10px"><summary>Show as a table</summary>
+    <div class="tablewrap" style="margin-top:8px"><table>
+      <tr><th>Week</th><th>Units sold</th></tr>
+      {% for w, u in chosen.sales_history %}<tr><td>{{ w }}</td><td>{{ '—' if u is none else '{:,}'.format(u) }}</td></tr>{% endfor %}
+    </table></div>
+  </details>
+  {% else %}
+  <p class="muted">No weekly sales stored for this SKU in this plan.</p>
+  {% endif %}
+</div>
+
+<script>
+  (function () {
+    const box = document.querySelector('.chart-box'); if (!box) return;
+    const svg = box.querySelector('svg'), tip = box.querySelector('.tip');
+    const xh = svg.querySelector('.xh'), hd = svg.querySelector('.hd');
+    const show = (rect) => {
+      const x = rect.dataset.x, y = rect.dataset.y;
+      xh.setAttribute('x1', x); xh.setAttribute('x2', x); xh.setAttribute('visibility', 'visible');
+      hd.setAttribute('cx', x); hd.setAttribute('cy', y); hd.setAttribute('visibility', 'visible');
+      const s = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+      tip.style.left = (x * s) + 'px'; tip.style.top = (y * s) + 'px';
+      tip.textContent = rect.dataset.tip; tip.hidden = false;
+    };
+    svg.querySelectorAll('rect[data-tip]').forEach(r => {
+      r.addEventListener('mouseenter', () => show(r));
+      r.addEventListener('touchstart', () => show(r), {passive: true});
+    });
+    svg.addEventListener('mouseleave', () => { tip.hidden = true; xh.setAttribute('visibility', 'hidden'); hd.setAttribute('visibility', 'hidden'); });
+  })();
+</script>
+{% endif %}
+{% endblock %}

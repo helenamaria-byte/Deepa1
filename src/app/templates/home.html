@@ -4,8 +4,8 @@
 <style>
   .top { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end; justify-content:space-between; margin-bottom:18px; }
   .progress { min-width:240px; }
-  .bar-outer { height:10px; background:#e4e9e2; border-radius:999px; overflow:hidden; margin-top:6px; }
-  .bar-inner { height:100%; background:var(--brand); }
+  .bar-outer { height:8px; background:var(--line); border-radius:999px; overflow:hidden; margin-top:8px; }
+  .bar-inner { height:100%; background:var(--accent); }
   .group { margin-top:26px; }
   .group h2 { margin:0 0 2px; display:flex; align-items:center; gap:10px; }
   .group .hint { color:var(--muted); margin:0 0 10px; font-size:14px; }
@@ -17,9 +17,9 @@
           padding:14px 16px; margin-bottom:10px; align-items:start; }
   .item.red { border-left-color:var(--red); } .item.blue { border-left-color:var(--blue); }
   .item.amber { border-left-color:var(--amber); } .item.purple { border-left-color:var(--purple); }
-  .item.done { opacity:.75; background:#fafbf9; }
+  .item.done { opacity:.6; }
   .chips { margin-top:6px; display:flex; flex-direction:column; gap:3px; }
-  .chip { font-size:13px; color:#33433a; }
+  .chip { font-size:13px; color:var(--ink-2); }
   .chip::before { content:"• "; color:var(--muted); }
   .sugg { font-size:13px; color:var(--muted); }
   .sugg b { display:block; font-size:24px; color:var(--ink); line-height:1.2; }
@@ -30,9 +30,13 @@
   details.change[open] summary { margin-bottom:8px; }
   details.change form { display:grid; gap:8px; }
   .why-txt { font-size:13px; color:var(--muted); margin-top:6px; display:inline-block; }
-  .gauge-wrap { margin-top:10px; max-width:240px; }
-  .gauge-key { font-size:11px; color:var(--muted); display:flex; flex-wrap:wrap; gap:4px 10px; align-items:center; }
-  .gauge-key .sw { width:10px; height:10px; border-radius:2px; display:inline-block; margin-right:-6px; }
+  .status { border:1px solid var(--line); border-left:4px solid var(--accent); background:var(--card);
+            border-radius:12px; padding:16px 20px; margin:4px 0 18px; display:flex; flex-wrap:wrap;
+            gap:14px 28px; align-items:center; justify-content:space-between; }
+  .status .done-line { color:var(--muted); font-size:14px; margin:0 0 4px; }
+  .status .due-line { font-size:19px; margin:0; font-weight:600; }
+  .status .due-line .n { color:var(--accent); }
+  .status .bar-outer { width:220px; }
   .rules li { margin-bottom:6px; }
   @media (max-width: 760px) { .item { grid-template-columns: 1fr; } }
 </style>
@@ -48,14 +52,27 @@
     <h1>{{ 'Hello ' ~ user ~ ', here' if user else 'Here' }} is what needs your decision</h1>
     <p class="sub" style="margin:0">{{ run_line(run, uplift_pct) }}</p>
   </div>
-  <div class="progress">
-    {% if todo %}
-      <b>{{ decided }} of {{ todo|length }} decided</b>
-      <div class="bar-outer"><div class="bar-inner" style="width:{{ (100 * decided / todo|length)|round|int }}%"></div></div>
+  <a class="btn light small" href="/runs/{{ run.id }}/workbook">Download Excel</a>
+</div>
+
+{% if todo %}
+<div class="status" role="status">
+  <div>
+    <p class="done-line">So far, as of {{ now_ist.strftime('%a %d %b, %I:%M %p').replace(' 0', ' ') }}:
+      <b>{{ decided }} decision{{ '' if decided == 1 else 's' }} made</b> for the plan of {{ run.run_date.strftime('%a %d %b') }}.</p>
+    {% if decided < todo|length %}
+      <p class="due-line"><span class="n">{{ todo|length - decided }} decision{{ '' if todo|length - decided == 1 else 's' }} left</span>,
+        to be made by {{ next_run.strftime('%a %d %b, %I:%M %p').replace(' 0', ' ') }}, when the next plan runs.</p>
+    {% else %}
+      <p class="due-line"><span class="n">✓ All {{ todo|length }} decisions made.</span> Next plan: {{ next_run.strftime('%a %d %b, %I:%M %p').replace(' 0', ' ') }}.</p>
     {% endif %}
-    <div class="actions" style="margin:10px 0 0"><a class="btn light small" href="/runs/{{ run.id }}/workbook">Download Excel</a></div>
+  </div>
+  <div style="min-width:180px">
+    <span class="muted">{{ decided }} of {{ todo|length }} done</span>
+    <div class="bar-outer"><div class="bar-inner" style="width:{{ (100 * decided / todo|length)|round|int }}%"></div></div>
   </div>
 </div>
+{% endif %}
 
 {% if last_any and last_any.status == 'FAILED' and last_any.id != run.id %}
   <div class="err">The latest run (#{{ last_any.id }}) failed. You are seeing the last good plan. <a href="/runs">See details</a></div>
@@ -72,8 +89,6 @@
 
 {% if not todo %}
   <div class="card"><h2 style="margin:0">✓ Nothing needs a decision today. All {{ run.counts.TOTAL }} SKUs are within their stock range.</h2></div>
-{% elif decided == todo|length %}
-  <div class="msg"><b>✓ All {{ todo|length }} decisions are done.</b> They are saved on the Decisions page and in the Excel file.</div>
 {% endif %}
 
 {% for g in groups %}
@@ -87,14 +102,7 @@
       <b>{{ r.sku_id }}</b> · {{ r.sku_name }}
       <div class="muted">{{ r.distributor_name }}{% if r.category %} · {{ r.category }}{% endif %}{% if r.perishable %} · <b>perishable</b>{% endif %}</div>
       <div class="chips">{% for c in r.chips %}<span class="chip">{{ c }}</span>{% endfor %}</div>
-      {% if r.cover_weeks is not none %}
-      <div class="gauge-wrap">{{ cover_gauge(r) }}
-        <div class="gauge-key"><span class="sw" style="background:{{ CHART.SERIES }}"></span>Weeks of stock
-          {% if r.on_order %}<span class="sw" style="background:{{ CHART.SERIES_LIGHT }}"></span>of which on order{% endif %}
-          <span class="sw" style="background:{{ CHART.BAND }}"></span>Target range</div>
-      </div>
-      {% endif %}
-      <a class="why-txt" href="/sku/{{ run.id }}/{{ r.sku_id }}">Details and sales chart</a>
+      <a class="why-txt" href="/sku/{{ run.id }}/{{ r.sku_id }}">Details</a>
     </div>
 
     <div class="sugg">

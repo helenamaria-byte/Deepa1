@@ -40,10 +40,11 @@ SAP CSV exports ──► Connector ──► Validation ──► Rules engine 
 
 | Page | What it is for |
 |---|---|
-| Home | This plan at a glance: how many SKUs wait for review, one button to start |
+| Today | Raghav's to-do list: decisions made so far and how many are due before the next plan, SKUs grouped by action with Approve / Change / Undo |
 | Recommendations | Every SKU with its suggestion, filters, and an Approve-all option |
 | Exceptions | SKUs that need judgment, with plain-English reasons |
 | Decisions | Every approval/change with reason, user and time; Excel upload |
+| Analytics | The only page with charts: weeks of stock for all SKUs, weekly sales for any SKU |
 | Runs | Run history and health, "Run the plan now", emails sent |
 | Settings | The rules; saving creates a new version used from the next run |
 

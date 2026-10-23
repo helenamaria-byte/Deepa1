@@ -20,7 +20,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 
 from src.app import charts
 from src.ingest.validate import reason_text
-from src.jobs.run_plan import STATUS_ORDER, run_plan, today_ist
+from src.jobs.run_plan import STATUS_ORDER, next_scheduled_run, now_ist, run_plan, today_ist
 from src.jobs.weekly_summary import send_weekly_summary
 from src.outputs.judgment_log import judgment_log_markdown
 from src.outputs.workbook import build_workbook, read_override_sheet
@@ -43,7 +43,6 @@ STATUS_LABELS = {
     "OK": ("OK", "green"),
 }
 templates.env.globals.update(STATUS_LABELS=STATUS_LABELS, STATUS_ORDER=STATUS_ORDER,
-                             cover_gauge=charts.cover_gauge, sales_chart=charts.sales_chart,
                              CHART=charts)
 
 
@@ -247,9 +246,11 @@ def home(request: Request):
     todo = [r for r in recs if r["status"] != "OK"]
     decided = sum(1 for r in todo if r["decision"])
     pending_approvable = [r for r in todo if not r["decision"] and r["status"] != "EXCEPTION"]
+    now = now_ist()
     return page(request, "home.html", run=run, last_any=last_any, groups=groups, todo=todo, decided=decided,
                 ok_rows=[r for r in recs if r["status"] == "OK"], pending_approvable=pending_approvable,
-                rules_summary=rules_summary(rules), uplift_pct=round((rules.festival.uplift - 1) * 100))
+                rules_summary=rules_summary(rules), uplift_pct=round((rules.festival.uplift - 1) * 100),
+                now_ist=now, next_run=next_scheduled_run(now))
 
 
 @app.post("/me")
@@ -348,6 +349,30 @@ def decide(request: Request, run_id: int, sku_id: str, decision: str = Form(...)
     rec = get_store().recommendation(run_id, sku_id)
     default = "/exceptions" if rec["status"] == "EXCEPTION" else "/recommendations"
     return remember(back(_safe_next(next, default), msg=f"Saved your decision for {sku_id}."), user)
+
+
+@app.get("/analytics", response_class=HTMLResponse)
+def analytics(request: Request, sku: str = ""):
+    """All charts live here, away from the decision page: weeks of stock for every
+    SKU, and weekly sales for one SKU."""
+    viewer(request)
+    store = get_store()
+    run = store.latest_run()
+    if run is None:
+        return page(request, "analytics.html", run=None)
+    _, rules = store.current_rules()
+    recs = _with_decisions(run)
+    todo = [r for r in recs if r["status"] != "OK"]
+    chosen = next((r for r in recs if r["sku_id"] == sku), None) or (todo[0] if todo else recs[0])
+    tiles = [("SKUs in this plan", len(recs)), ("Need a decision", len(todo)),
+             ("Decisions made", sum(1 for r in todo if r["decision"])),
+             ("Units already on order", f"{sum((r.get('on_order') or 0) for r in recs):,.0f}")]
+    return page(request, "analytics.html", run=run, recs=recs, chosen=chosen, tiles=tiles,
+                stock_svg=charts.stock_overview(recs),
+                sales_svg=charts.sales_chart(chosen["sales_history"], chosen["avg4"], chosen["avg12"],
+                                             rules.windows.short_weeks, rules.windows.long_weeks),
+                short_weeks=rules.windows.short_weeks, long_weeks=rules.windows.long_weeks,
+                hd_pct=round((rules.high_demand.ratio - 1) * 100))
 
 
 @app.get("/decisions", response_class=HTMLResponse)

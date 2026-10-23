@@ -1,10 +1,11 @@
-"""The dashboard's two charts, rendered server-side as inline SVG.
+"""The Analytics tab's two charts, rendered server-side as inline SVG (night theme).
 
-1. cover_gauge: weeks of stock against the SKU's target range (landing page rows).
-2. sales_chart: weekly units sold with the 4- and 12-week averages (SKU page).
+1. stock_overview: weeks of stock for every SKU against its own target range.
+2. sales_chart: weekly units sold for one SKU with its 4- and 12-week averages.
 
-Colours are the validated reference chart palette (slot 1 blue, slot 2 orange,
-slot 3 aqua); text always uses ink colours, never the series colour."""
+Colours are the reference chart palette's dark-mode steps, validated against the
+card surface (scripts/validate_palette.js: all checks pass). Text always uses
+ink colours, never a series colour."""
 from __future__ import annotations
 
 import math
@@ -12,52 +13,14 @@ from html import escape
 
 from markupsafe import Markup
 
-SERIES = "#2a78d6"        # weekly sales / stock on hand
-SERIES_LIGHT = "#a9c9f0"  # lighter step of the same blue: stock on order
-AVG_SHORT = "#eb6834"     # recent (4-week) average
-AVG_LONG = "#1baf7a"      # long (12-week) average
-TRACK, BAND, GRID = "#eef1ec", "#d3dccf", "#e6ebe4"
-INK, MUTED, SURFACE = "#1c2a20", "#5d6b60", "#ffffff"
-
-
-def _bar(x0: float, x1: float, y: float, h: float, fill: str) -> str:
-    """Horizontal bar, square at the baseline, 4px rounded data end."""
-    w = max(x1 - x0, 0)
-    if w <= 0:
-        return ""
-    r = min(4, w, h / 2)
-    return (f'<path d="M{x0:.1f},{y:.1f} H{x1 - r:.1f} Q{x1:.1f},{y:.1f} {x1:.1f},{y + r:.1f} '
-            f'V{y + h - r:.1f} Q{x1:.1f},{y + h:.1f} {x1 - r:.1f},{y + h:.1f} H{x0:.1f} Z" fill="{fill}"/>')
-
-
-def cover_gauge(r: dict) -> Markup:
-    cover = r.get("cover_weeks")
-    if cover is None:
-        return Markup("")
-    lo, hi = r["min_cover"], r["max_cover"]
-    on_order, demand = r.get("on_order") or 0, r.get("weekly_demand") or 0
-    on_hand_cover = (r["on_hand"] / demand) if (on_order and demand and r.get("on_hand") is not None) else cover
-    W, pad, y, h = 240, 1, 3, 10
-    top = max(hi * 1.5, cover * 1.12, lo + 1)
-    x = lambda v: pad + (W - 2 * pad) * max(0.0, min(v, top)) / top
-    title = f"{cover} weeks of stock; target {lo:g} to {hi:g} weeks"
-    parts = [
-        f'<rect x="{pad}" y="{y}" width="{W - 2 * pad}" height="{h}" rx="5" fill="{TRACK}"/>',
-        f'<rect x="{x(lo):.1f}" y="{y}" width="{x(hi) - x(lo):.1f}" height="{h}" fill="{BAND}">'
-        f'<title>Target range {lo:g} to {hi:g} weeks</title></rect>',
-    ]
-    if on_order:
-        parts.append(_bar(x(0), x(on_hand_cover), y + 2, h - 4, SERIES))
-        parts.append(_bar(x(on_hand_cover) + 2, x(cover), y + 2, h - 4, SERIES_LIGHT))
-        title += f" ({on_hand_cover:.2f} from stock on hand, the rest on order)"
-    else:
-        parts.append(_bar(x(0), x(cover), y + 2, h - 4, SERIES))
-    for v in (lo, hi):
-        parts.append(f'<text x="{x(v):.1f}" y="26" text-anchor="middle" font-size="10" fill="{MUTED}">{v:g}</text>')
-    parts.append(f'<text x="{W - pad}" y="26" text-anchor="end" font-size="10" fill="{MUTED}">wks</text>')
-    svg = (f'<svg class="gauge" viewBox="0 0 {W} 30" width="100%" style="max-width:{W}px" role="img" '
-           f'aria-label="{escape(title)}"><title>{escape(title)}</title>{"".join(parts)}</svg>')
-    return Markup(svg)
+SERIES = "#3987e5"        # stock on hand / weekly sales (slot 1, dark step)
+SERIES_DIM = "#2b5f9e"    # stock on order: same blue, a step toward the surface
+AVG_SHORT = "#d95926"     # recent (4-week) average (slot 2)
+AVG_LONG = "#199e70"      # long (12-week) average (slot 3)
+SURFACE, TRACK, BAND, GRID = "#131c2a", "#1b2636", "#2a3a52", "#223044"
+INK, MUTED = "#e6edf5", "#93a1b3"
+STATUS_TEXT = {"STOCKOUT_RISK": "Reorder now", "HIGH_DEMAND": "Demand rising", "OVERSTOCK_RISK": "Pause order",
+               "EXCEPTION": "Needs judgment", "OK": "OK"}
 
 
 def _nice_ceiling(v: float) -> float:
@@ -68,6 +31,58 @@ def _nice_ceiling(v: float) -> float:
         if v <= step * mag:
             return step * mag
     return 10 * mag
+
+
+def _bar(x0: float, x1: float, y: float, h: float, fill: str) -> str:
+    """Horizontal bar, square at the baseline, 4px rounded data end."""
+    w = x1 - x0
+    if w <= 0.5:
+        return ""
+    r = min(4, w, h / 2)
+    return (f'<path d="M{x0:.1f},{y:.1f} H{x1 - r:.1f} Q{x1:.1f},{y:.1f} {x1:.1f},{y + r:.1f} '
+            f'V{y + h - r:.1f} Q{x1:.1f},{y + h:.1f} {x1 - r:.1f},{y + h:.1f} H{x0:.1f} Z" fill="{fill}"/>')
+
+
+def stock_overview(recs: list[dict]) -> Markup:
+    """One row per SKU, lowest cover first: bar = weeks of stock (on hand, then on
+    order), faint band = that SKU's target range, value at the bar tip."""
+    rows = sorted([r for r in recs if r.get("cover_weeks") is not None], key=lambda r: r["cover_weeks"])
+    if not rows:
+        return Markup("")
+    W, label_w, right_w, row_h, top, bottom = 760, 200, 120, 30, 6, 26
+    H = top + row_h * len(rows) + bottom
+    vmax = _nice_ceiling(max(max(r["cover_weeks"], r["max_cover"]) for r in rows) * 1.05)
+    x0, x1 = label_w, W - right_w
+    x = lambda v: x0 + (x1 - x0) * max(0.0, min(v, vmax)) / vmax
+    out = []
+    step = vmax / 5
+    for k in range(6):
+        v = step * k
+        out.append(f'<line x1="{x(v):.1f}" x2="{x(v):.1f}" y1="{top}" y2="{H - bottom}" stroke="{GRID}" stroke-width="1"/>')
+        out.append(f'<text x="{x(v):.1f}" y="{H - 8}" text-anchor="middle" font-size="11" fill="{MUTED}">{v:g}</text>')
+    for i, r in enumerate(rows):
+        y = top + i * row_h
+        cy = y + row_h / 2
+        cover, on_order, demand = r["cover_weeks"], r.get("on_order") or 0, r.get("weekly_demand") or 0
+        hand = r["on_hand"] / demand if (on_order and demand and r.get("on_hand") is not None) else cover
+        name = r["sku_name"].replace("Freshroots ", "")
+        name = name if len(name) <= 22 else name[:21] + "…"
+        tip = (f"{r['sku_id']} {r['sku_name']}: {cover} weeks of stock"
+               + (f" ({hand:.2f} on hand + {cover - hand:.2f} on order)" if on_order else "")
+               + f"; target {r['min_cover']:g}-{r['max_cover']:g} weeks; {STATUS_TEXT.get(r['status'], r['status'])}")
+        out.append(f'<g><title>{escape(tip)}</title>'
+                   f'<rect x="0" y="{y}" width="{W}" height="{row_h}" fill="transparent"/>'
+                   f'<text x="0" y="{cy + 4:.1f}" font-size="12" fill="{INK}"><tspan font-weight="600">{escape(r["sku_id"])}</tspan>'
+                   f'<tspan fill="{MUTED}"> {escape(name)}</tspan></text>'
+                   f'<rect x="{x(r["min_cover"]):.1f}" y="{cy - 9:.1f}" width="{x(r["max_cover"]) - x(r["min_cover"]):.1f}" '
+                   f'height="18" rx="3" fill="{BAND}"/>'
+                   + _bar(x0, x(hand), cy - 6, 12, SERIES)
+                   + (_bar(x(hand) + 2, x(cover), cy - 6, 12, SERIES_DIM) if on_order else "")
+                   + f'<text x="{min(x(cover), x1) + 6:.1f}" y="{cy + 4:.1f}" font-size="12" fill="{INK}">{cover:g}</text>'
+                   f'<text x="{W}" y="{cy + 4:.1f}" text-anchor="end" font-size="12" fill="{MUTED}">'
+                   f'{escape(STATUS_TEXT.get(r["status"], r["status"]))}</text></g>')
+    return Markup(f'<svg class="stock-chart" viewBox="0 0 {W} {H}" width="100%" role="img" '
+                  f'aria-label="Weeks of stock for {len(rows)} SKUs against their target ranges">{"".join(out)}</svg>')
 
 
 def sales_chart(history: list, avg4: float | None, avg12: float | None, short_weeks: int,
@@ -131,6 +146,5 @@ def sales_chart(history: list, avg4: float | None, avg12: float | None, short_we
         out.append(f'<rect x="{x(i) - step / 2:.1f}" y="{mt}" width="{step:.1f}" height="{H - mt - mb}" '
                    f'fill="transparent" data-x="{x(i):.1f}" data-y="{yy(u):.1f}" '
                    f'data-tip="{escape(w)}: {u:,} units sold"/>')
-    svg = (f'<svg class="sales-chart" viewBox="0 0 {W} {H}" width="100%" role="img" '
-           f'aria-label="Weekly units sold for the last {n} weeks">{"".join(out)}</svg>')
-    return Markup(svg)
+    return Markup(f'<svg class="sales-chart" viewBox="0 0 {W} {H}" width="100%" role="img" '
+                  f'aria-label="Weekly units sold for the last {n} weeks">{"".join(out)}</svg>')

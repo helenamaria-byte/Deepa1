@@ -76,7 +76,7 @@ def test_every_page_loads(client):
         r = client.get(path)
         assert r.status_code == 200, path
     home = client.get("/").text
-    assert "0 of 7 decided" in home and "Reorder now" in home
+    assert "0 of 7 done" in home and "Reorder now" in home
     rec = client.get("/recommendations?status=STOCKOUT_RISK").text
     assert "SKU001" in rec and "750" in rec and "SKU006" not in rec
 
@@ -98,7 +98,7 @@ def test_override_round_trip_and_delete(client):
 def test_approve_all(client):
     r = client.post("/recommendations/approve-all", data={"run_id": "1", "reason": "Reviewed with procurement"})
     assert "Approved 7 suggestions." in r.text
-    assert "All 7 decisions are done" in client.get("/").text
+    assert "All 7 decisions made" in client.get("/").text
 
 
 def test_excel_download_and_upload(client):
@@ -161,13 +161,13 @@ def test_landing_page_is_raghavs_action_list(client):
 
 def test_one_click_approve_and_undo(client):
     r = client.post("/sku/1/SKU001", data={"decision": "APPROVED", "next": "/#SKU001"})
-    assert "Saved your decision for SKU001" in r.text and "1 of 7 decided" in r.text
+    assert "Saved your decision for SKU001" in r.text and "1 of 7 done" in r.text
     d = get_store().latest_decisions(1)["SKU001"]
     assert d["final_qty"] == 750 and d["reason"] == "Approved as recommended"
     oid = re.search(r'/decisions/(\d+)/delete" class="inline">\s*<input type="hidden" name="next" value="/#SKU001"',
                     r.text).group(1)
     r = client.post(f"/decisions/{oid}/delete", data={"next": "/#SKU001"})
-    assert "0 of 7 decided" in r.text
+    assert "0 of 7 done" in r.text
 
 
 def test_change_needs_a_reason(client):
@@ -180,4 +180,4 @@ def test_change_needs_a_reason(client):
 
 def test_approve_all_from_landing_page_needs_no_reason(client):
     r = client.post("/recommendations/approve-all", data={"run_id": "1", "next": "/"})
-    assert "Approved 7 suggestions." in r.text and "All 7 decisions are done" in r.text
+    assert "Approved 7 suggestions." in r.text and "All 7 decisions made" in r.text

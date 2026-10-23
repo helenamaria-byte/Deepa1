@@ -14,7 +14,7 @@ import logging
 import time
 import traceback
 from collections import Counter
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time as clock_time, timedelta, timezone
 
 from src.ai.explain import Explainer, build_facts
 from src.connectors.base import Connector
@@ -34,8 +34,27 @@ IST = timezone(timedelta(hours=5, minutes=30))
 STATUS_ORDER = ["STOCKOUT_RISK", "HIGH_DEMAND", "OVERSTOCK_RISK", "EXCEPTION", "OK"]
 
 
+RUN_WEEKDAYS = (0, 3)  # Monday, Thursday - must match the cron in vercel.json (30 0 * * 1,4 UTC)
+RUN_TIME_IST = clock_time(6, 0)
+
+
 def today_ist() -> date:
     return datetime.now(IST).date()
+
+
+def now_ist() -> datetime:
+    return datetime.now(IST)
+
+
+def next_scheduled_run(now: datetime) -> datetime:
+    """The next Monday/Thursday 06:00 IST strictly after `now`."""
+    now = now.astimezone(IST)
+    for days in range(8):
+        day = now.date() + timedelta(days=days)
+        slot = datetime.combine(day, RUN_TIME_IST, IST)
+        if day.weekday() in RUN_WEEKDAYS and slot > now:
+            return slot
+    raise AssertionError("unreachable")
 
 
 def _scrub(text: str) -> str:
