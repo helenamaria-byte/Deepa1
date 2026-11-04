@@ -229,8 +229,10 @@ def test_excel_import_all_or_nothing(plan):
 
 
 # ---- plan status and full dataset ---------------------------------------------------
-def test_plan_status_reflects_real_inputs(plan):
+def test_plan_status_reflects_real_inputs(plan, monkeypatch):
     store, run, c = plan
+    # Pin "now" to the day after the run: the result must not depend on when the test runs.
+    monkeypatch.setattr("src.app.main.now_ist", lambda: datetime(2026, 10, 23, 9, 0, tzinfo=IST))
     home = c.get("/").text
     assert "Sales data covers" in home and "2026-W27 to 2026-W42" in home
     assert "15 processed (15 in the SKU master)" in home and "Safe to act on" in home
