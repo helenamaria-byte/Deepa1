@@ -18,7 +18,8 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse,
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
-from src.app import charts
+from src.app import charts, whatif
+from src.app.projection import project_stock
 from src.ingest.validate import reason_text
 from src.app.status import plan_status
 from src.engine.sizing import is_material_change
@@ -387,8 +388,8 @@ def reason_or_default(store: Store, run_id: int, sku_id: str, decision: str, qty
 
 @app.get("/analytics", response_class=HTMLResponse)
 def analytics(request: Request, sku: str = ""):
-    """All charts live here, away from the decision page: weeks of stock for every
-    SKU, and weekly sales for one SKU."""
+    """All charts live here, away from the decision page: weeks of stock for every SKU;
+    for one SKU, projected stock and weekly sales; and a what-if on the rules."""
     viewer(request)
     store = get_store()
     run = store.latest_run()
@@ -397,18 +398,33 @@ def analytics(request: Request, sku: str = ""):
     rules = store.rules_for_version(run["rules_version"])
     recs = _with_decisions(run)
     progress = store.decision_progress(run["id"])
-    todo = recs
     chosen = next((r for r in recs if r["sku_id"] == sku), None) or recs[0]
     tiles = [("SKUs in this plan", len(recs)), ("Need action (order or pause)",
                                                 sum(1 for r in recs if r["status"] != "OK")),
              ("Decisions made", f"{progress['decided']} of {progress['total']}"),
              ("Units already on order", f"{sum((r.get('on_order') or 0) for r in recs):,.0f}")]
+    projection = project_stock(chosen, run["run_date"], rules)
+    # What-if: thresholds from the query string; defaults are the plan's own rules.
+    base_params = whatif.current_params(rules)
+    params, wi, wi_err = dict(base_params), None, ""
+    try:
+        for name in whatif.PARAMS:
+            if request.query_params.get(name, "").strip():
+                params[name] = float(request.query_params[name])
+        if params != base_params:
+            wi = whatif.what_if(recs, bool(run["festival"]), rules,
+                                {k: v for k, v in params.items() if v != base_params[k]})
+    except Exception as exc:  # noqa: BLE001 - bad numbers: show why, keep the page
+        wi_err = "Those values don't work: " + str(exc).splitlines()[0][:160]
     return page(request, "analytics.html", run=run, recs=recs, chosen=chosen, tiles=tiles,
                 stock_svg=charts.stock_overview(recs),
+                projection=projection,
+                projection_svg=charts.projection_chart(projection["rows"]) if projection else "",
                 sales_svg=charts.sales_chart(chosen["sales_history"], chosen["avg4"], chosen["avg12"],
                                              rules.windows.short_weeks, rules.windows.long_weeks),
                 short_weeks=rules.windows.short_weeks, long_weeks=rules.windows.long_weeks,
-                hd_pct=round((rules.high_demand.ratio - 1) * 100))
+                hd_pct=round((rules.high_demand.ratio - 1) * 100),
+                wi=wi, wi_err=wi_err, wi_params=params, wi_base=base_params)
 
 
 @app.get("/decisions", response_class=HTMLResponse)

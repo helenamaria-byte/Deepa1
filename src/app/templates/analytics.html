@@ -46,10 +46,10 @@
   </details>
 </div>
 
-<div class="card" id="sales">
+<div class="card" id="sku-close-up">
   <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;justify-content:space-between">
-    <h2 style="margin:0">Weekly units sold</h2>
-    <form method="get" action="/analytics#sales" style="min-width:260px">
+    <h2 style="margin:0">One SKU, up close</h2>
+    <form method="get" action="/analytics#sku-close-up" style="min-width:260px">
       <label for="sku">SKU</label>
       <select id="sku" name="sku" onchange="this.form.submit()">
         {% for r in recs %}<option value="{{ r.sku_id }}" {{ 'selected' if r.sku_id == chosen.sku_id }}>{{ r.sku_id }} · {{ r.sku_name }}</option>{% endfor %}
@@ -57,6 +57,34 @@
       <noscript><button class="btn small">Show</button></noscript>
     </form>
   </div>
+  <h3 style="margin:14px 0 2px">Projected stock, next {{ projection.rows|length if projection else 13 }} weeks</h3>
+  {% if projection %}
+  <p class="muted" style="margin:0 0 6px">Stock at the end of each week if sales continue at the {{ long_weeks }}-week average
+    (higher in festival months) and open Zoho orders arrive on their expected dates. A projection from the plan's numbers, not a forecast.</p>
+  <div class="key">
+    <span><span class="sw" style="background:{{ CHART.SERIES }}"></span>Projected stock</span>
+    <span><span class="sw" style="background:{{ CHART.BELOW }}"></span>Below the minimum</span>
+    <span><span class="sw" style="background:{{ CHART.ABOVE }}"></span>Above the maximum</span>
+    <span><span class="ln" style="background:{{ CHART.BELOW }}"></span>Minimum ({{ chosen.min_cover|int }} weeks of demand)</span>
+    {% if 'Maximum</text>' in projection_svg|string %}<span><span class="ln" style="background:{{ CHART.MUTED }}"></span>Maximum ({{ chosen.max_cover|int }} weeks)</span>
+    {% else %}<span>Maximum ({{ chosen.max_cover|int }} weeks of demand) is above the chart</span>{% endif %}
+  </div>
+  {{ projection_svg }}
+  <ul style="margin:6px 0 0;padding-left:18px;font-size:14px">{% for n in projection.notes %}<li>{{ n }}</li>{% endfor %}</ul>
+  <details style="margin-top:8px"><summary>Show as a table</summary>
+    <div class="tablewrap" style="margin-top:8px"><table>
+      <tr><th>Week of</th><th>Demand</th><th>Arriving</th><th>Stock at week end</th><th>Minimum</th><th>Maximum</th></tr>
+      {% for r in projection.rows %}<tr><td>{{ r.starts.strftime('%d %b') }}{% if r.festival %} <span class="muted">(festival)</span>{% endif %}</td>
+        <td>{{ '{:,.0f}'.format(r.demand) }}</td><td>{{ r.arriving|join(', ') or '—' }}</td>
+        <td>{{ '{:,.0f}'.format(r.stock) }}{% if r.runs_out %} <span class="badge red">runs out</span>{% endif %}</td>
+        <td>{{ '{:,.0f}'.format(r.min) }}</td><td>{{ '{:,.0f}'.format(r.max) }}</td></tr>{% endfor %}
+    </table></div>
+  </details>
+  {% else %}
+  <p class="muted">Not available for this SKU: stock or sales history is missing, or this plan was made before calculation details were stored.</p>
+  {% endif %}
+
+  <h3 style="margin:22px 0 2px">Weekly units sold</h3>
   {% if sales_svg %}
   <div class="key" style="margin-top:10px">
     <span><span class="ln" style="background:{{ CHART.SERIES }}"></span>Units sold each week</span>
@@ -74,6 +102,46 @@
   </details>
   {% else %}
   <p class="muted">No weekly sales stored for this SKU in this plan.</p>
+  {% endif %}
+</div>
+
+<div class="card" id="what-if">
+  <h2 style="margin-top:0">What if the rules changed?</h2>
+  <p class="muted" style="margin:0 0 10px">Try different thresholds on this plan's numbers and see which SKUs would move.
+    Nothing is saved. To keep a change, save it on the <a href="/settings">Settings</a> page; it applies from the next plan.</p>
+  <form method="get" action="/analytics#what-if" class="filters">
+    <input type="hidden" name="sku" value="{{ chosen.sku_id }}">
+    {% for name, label in [('uplift_pct', 'Festival uplift %'), ('hd_pct', 'Demand rising above %'),
+                           ('gen_min', 'Minimum weeks'), ('gen_max', 'Maximum weeks'),
+                           ('per_min', 'Perishable min weeks'), ('per_max', 'Perishable max weeks')] %}
+    <div style="width:150px"><label for="wi-{{ name }}">{{ label }}</label>
+      <input id="wi-{{ name }}" type="number" step="any" min="0" name="{{ name }}" value="{{ '%g'|format(wi_params[name]) }}"></div>
+    {% endfor %}
+    <button class="btn small">Show the impact</button>
+    {% if wi %}<a href="/analytics?sku={{ chosen.sku_id }}#what-if" class="muted">Reset</a>{% endif %}
+  </form>
+  {% if wi_err %}<div class="err">{{ wi_err }}</div>{% endif %}
+  {% if wi %}
+  <div class="tablewrap" style="margin-top:12px"><table>
+    <tr><th>Group</th><th>Now</th><th>With these rules</th></tr>
+    {% for status, now, then in wi.counts %}
+    <tr><td>{{ STATUS_LABELS[status][0] }}</td><td>{{ now }}</td>
+        <td><b>{{ then }}</b>{% if then != now %} <span class="muted">({{ '%+d'|format(then - now) }})</span>{% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+  <h3 style="margin:16px 0 6px">SKUs that would change ({{ wi.changed|length }})</h3>
+  {% if wi.changed %}
+  <div class="tablewrap"><table>
+    <tr><th>SKU</th><th>Now</th><th>With these rules</th><th>Weeks of stock</th></tr>
+    {% for c in wi.changed %}
+    <tr><td><b>{{ c.sku_id }}</b><div class="muted">{{ c.sku_name }}</div></td>
+      <td>{{ STATUS_LABELS[c.before][0] }}{% if c.qty_before %} · {{ '{:,}'.format(c.qty_before) }}{% endif %}</td>
+      <td><b>{{ STATUS_LABELS[c.after][0] }}</b>{% if c.qty_after %} · {{ '{:,}'.format(c.qty_after) }}{% endif %}</td>
+      <td>{{ c.cover_before }}{% if c.cover_after != c.cover_before %} → {{ c.cover_after }}{% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="muted">No SKU would change with these values.</p>{% endif %}
+  <p class="muted" style="margin:8px 0 0">Uses the same rule code as the plan. Held as in the plan: sales averages, stock, counted purchase orders and data-quality checks.</p>
   {% endif %}
 </div>
 

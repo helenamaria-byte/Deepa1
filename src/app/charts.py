@@ -148,3 +148,64 @@ def sales_chart(history: list, avg4: float | None, avg12: float | None, short_we
                    f'data-tip="{escape(w)}: {u:,} units sold"/>')
     return Markup(f'<svg class="sales-chart" viewBox="0 0 {W} {H}" width="100%" role="img" '
                   f'aria-label="Weekly units sold for the last {n} weeks">{"".join(out)}</svg>')
+
+
+BELOW, ABOVE = "#f87171", "#fbbf24"  # status colours (always with a legend label): below minimum / above maximum
+
+
+def projection_chart(rows: list[dict]) -> Markup:
+    """Projected stock at the end of each week (bars) against the minimum and maximum
+    stock for that week (lines). Red bar: below the minimum. Amber bar: above the maximum."""
+    if not rows:
+        return Markup("")
+    W, H, ml, mr, mt, mb = 640, 250, 52, 92, 22, 30
+    n = len(rows)
+    # Scale to the stock and the minimum; the maximum is drawn only when it falls inside
+    # that range (otherwise it flattens every bar). The legend says when it is off the chart.
+    ymax = _nice_ceiling(max(max(r["stock"], r["min"]) for r in rows) * 1.25)
+    slot = (W - ml - mr) / n
+    bw = min(24, slot * 0.62)
+    yy = lambda v: mt + (H - mt - mb) * (1 - v / ymax)
+    cx = lambda i: ml + slot * (i + 0.5)
+    out = []
+    for k in range(5):
+        v = ymax * k / 4
+        out.append(f'<line x1="{ml}" x2="{W - mr}" y1="{yy(v):.1f}" y2="{yy(v):.1f}" stroke="{GRID}" stroke-width="1"/>')
+        out.append(f'<text x="{ml - 6}" y="{yy(v) + 4:.1f}" text-anchor="end" font-size="11" fill="{MUTED}">{v:,.0f}</text>')
+    for i, r in enumerate(rows):
+        x0, base = cx(i) - bw / 2, yy(0)
+        top = yy(r["stock"])
+        colour = BELOW if r["stock"] < r["min"] else (ABOVE if r["stock"] > r["max"] else SERIES)
+        h = base - top
+        tip = (f"Week of {r['starts']:%d %b}: {r['stock']:,.0f} units at the end of the week "
+               f"(demand {r['demand']:,.0f}{', festival month' if r['festival'] else ''}; "
+               f"minimum {r['min']:,.0f}, maximum {r['max']:,.0f})"
+               + (f"; arriving: {', '.join(r['arriving'])}" if r["arriving"] else "")
+               + ("; runs out this week" if r["runs_out"] else ""))
+        bar = ""
+        if h > 0.5:
+            rad = min(4, h, bw / 2)
+            bar = (f'<path d="M{x0:.1f},{base:.1f} V{top + rad:.1f} Q{x0:.1f},{top:.1f} {x0 + rad:.1f},{top:.1f} '
+                   f'H{x0 + bw - rad:.1f} Q{x0 + bw:.1f},{top:.1f} {x0 + bw:.1f},{top + rad:.1f} V{base:.1f} Z" '
+                   f'fill="{colour}"/>')
+        out.append(f'<g><title>{escape(tip)}</title><rect x="{cx(i) - slot / 2:.1f}" y="{mt}" width="{slot:.1f}" '
+                   f'height="{H - mt - mb}" fill="transparent"/>{bar}</g>')
+        if r["arriving"]:
+            out.append(f'<text x="{cx(i):.1f}" y="{max(top - 6, 11):.1f}" text-anchor="middle" font-size="10" '
+                       f'fill="{INK}">+{r["arrivals"]:,.0f}</text>')
+        if i % 2 == 0 or n <= 8:
+            out.append(f'<text x="{cx(i):.1f}" y="{H - 10}" text-anchor="middle" font-size="11" fill="{MUTED}">'
+                       f'{r["starts"]:%d %b}</text>')
+    # Minimum and maximum: step lines that follow each week's demand (festival months raise them).
+    for key, colour, name in (("min", BELOW, "Minimum"), ("max", MUTED, "Maximum")):
+        if key == "max" and any(r["max"] > ymax for r in rows):
+            continue
+        pts = []
+        for i, r in enumerate(rows):
+            pts += [(cx(i) - slot / 2, yy(r[key])), (cx(i) + slot / 2, yy(r[key]))]
+        d = " ".join(f"{'M' if j == 0 else 'L'}{x:.1f},{y:.1f}" for j, (x, y) in enumerate(pts))
+        out.append(f'<path d="{d}" fill="none" stroke="{colour}" stroke-width="1.5" stroke-opacity=".9"/>')
+        out.append(f'<text x="{W - mr + 6}" y="{pts[-1][1] + 4:.1f}" font-size="12" fill="{INK}">{name}</text>')
+    return Markup(f'<svg class="projection-chart" viewBox="0 0 {W} {H}" width="100%" role="img" '
+                  f'aria-label="Projected stock for the next {n} weeks against the minimum and maximum">'
+                  f'{"".join(out)}</svg>')
