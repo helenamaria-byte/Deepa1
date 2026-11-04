@@ -90,6 +90,9 @@ def build_features(clean: CleanData, rules: RulesConfig) -> pd.DataFrame:
                 ok, why = False, "No expected delivery date, so it is not counted"
             elif runs_out is not None and expected > runs_out:
                 ok, why = False, f"Arrives {expected:%d %b}, after stock on hand runs out on {runs_out:%d %b}"
+            elif expected < clean.run_date:
+                ok, why = True, (f"Was due {expected:%d %b} and is still open (overdue); counted, "
+                                 "but check with the supplier")
             else:
                 ok, why = True, (f"Arrives {expected:%d %b}, before stock on hand runs out"
                                  + (f" on {runs_out:%d %b}" if runs_out else ""))

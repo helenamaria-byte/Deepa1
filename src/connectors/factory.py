@@ -11,6 +11,9 @@ def make_connector(url: str | None = None, credentials: str | None = None) -> Co
     credentials = settings.data_source_credentials if credentials is None else credentials
     if not url:
         return CsvFolderConnector(ROOT / "data")
+    if url == "demo:shift":  # demo mode: sample files moved forward to current dates
+        from src.connectors.demo_shift import DemoShiftConnector
+        return DemoShiftConnector(ROOT / "data")
     if url.startswith("file://"):
         return CsvFolderConnector(url[len("file://"):])
     if url.startswith(("http://", "https://")):

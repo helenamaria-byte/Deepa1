@@ -90,4 +90,4 @@ def plan_status(run: dict, recs: list[dict], rules: RulesConfig, now: datetime,
     label = {"ok": "Safe to act on", "caution": "Check the warnings before acting",
              "unsafe": "Not reliable: inputs are missing or out of date"}[level]
     return {"level": level, "label": label, "items": items, "warnings": warnings,
-            "demo": "demo data" in (info.get("source") or "")}
+            "demo": "demo data" in (info.get("source") or "").lower()}

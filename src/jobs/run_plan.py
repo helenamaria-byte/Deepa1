@@ -72,6 +72,10 @@ def source_label(connector: Connector) -> str:
     """Plain description of where the data came from (never claims more than is true)."""
     if connector.name == "csv_folder" and not settings.data_source_url:
         return "Sample CSV files bundled with the app (demo data, not a live SAP export)"
+    if connector.name == "demo_shift":
+        weeks = getattr(connector, "shift_weeks", 0)
+        return ("Demo data: the case's sample files with dates moved forward "
+                f"{weeks} week{'s' if weeks != 1 else ''} to stay current (not a live SAP export)")
     return {"csv_folder": "CSV export folder", "https": "SAP exports over HTTPS", "s3": "SAP exports in S3",
             "sftp": "SAP exports over SFTP"}.get(connector.name, connector.name)
 
