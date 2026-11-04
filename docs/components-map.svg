@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2000 1324" width="2000" height="1324" font-family="Segoe UI, Inter, Arial, sans-serif">
+<rect width="2000" height="1324" fill="#ffffff"/>
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#172a4d"/></marker></defs>
+<text x="1000.0" y="58" text-anchor="middle" font-size="38" font-weight="700" fill="#172a4d">Freshroots · Demand Planning System — Components Map</text>
+<rect x="34" y="90" width="1932" height="66" rx="8" fill="#172a4d"/>
+<text x="140.0" y="132" text-anchor="middle" font-size="24" fill="#fff">Actor</text>
+<text x="391.4" y="132" text-anchor="middle" font-size="24" fill="#fff">Trigger</text>
+<text x="678.1" y="132" text-anchor="middle" font-size="24" fill="#fff">Input</text>
+<text x="964.8" y="132" text-anchor="middle" font-size="24" fill="#fff">Context</text>
+<text x="1251.4" y="132" text-anchor="middle" font-size="24" fill="#fff">Processing</text>
+<text x="1538.1" y="132" text-anchor="middle" font-size="24" fill="#fff">AI</text>
+<text x="1824.8" y="132" text-anchor="middle" font-size="24" fill="#fff">Output</text>
+<rect x="246" y="158" width="1720" height="135" fill="#eaf0fd"/>
+<line x1="534.7" x2="534.7" y1="158" y2="293" stroke="#ffffff" stroke-width="2"/>
+<line x1="821.4" x2="821.4" y1="158" y2="293" stroke="#ffffff" stroke-width="2"/>
+<line x1="1108.1" x2="1108.1" y1="158" y2="293" stroke="#ffffff" stroke-width="2"/>
+<line x1="1394.8" x2="1394.8" y1="158" y2="293" stroke="#ffffff" stroke-width="2"/>
+<line x1="1681.5" x2="1681.5" y1="158" y2="293" stroke="#ffffff" stroke-width="2"/>
+<rect x="34" y="158" width="212" height="135" fill="#172a4d"/>
+<text x="140.0" y="216.5" text-anchor="middle" font-size="24" font-weight="700" fill="#fff">Demand Planner</text>
+<text x="140.0" y="244.5" text-anchor="middle" font-size="16" fill="#dbe3f1">(Raghav)</text>
+<rect x="246" y="295" width="1720" height="135" fill="#efeafb"/>
+<line x1="534.7" x2="534.7" y1="295" y2="430" stroke="#ffffff" stroke-width="2"/>
+<line x1="821.4" x2="821.4" y1="295" y2="430" stroke="#ffffff" stroke-width="2"/>
+<line x1="1108.1" x2="1108.1" y1="295" y2="430" stroke="#ffffff" stroke-width="2"/>
+<line x1="1394.8" x2="1394.8" y1="295" y2="430" stroke="#ffffff" stroke-width="2"/>
+<line x1="1681.5" x2="1681.5" y1="295" y2="430" stroke="#ffffff" stroke-width="2"/>
+<rect x="34" y="295" width="212" height="135" fill="#172a4d"/>
+<text x="140.0" y="353.5" text-anchor="middle" font-size="24" font-weight="700" fill="#fff">Scheduler</text>
+<text x="140.0" y="381.5" text-anchor="middle" font-size="16" fill="#dbe3f1">(Vercel Cron)</text>
+<rect x="246" y="432" width="1720" height="135" fill="#e3f3f0"/>
+<line x1="534.7" x2="534.7" y1="432" y2="567" stroke="#ffffff" stroke-width="2"/>
+<line x1="821.4" x2="821.4" y1="432" y2="567" stroke="#ffffff" stroke-width="2"/>
+<line x1="1108.1" x2="1108.1" y1="432" y2="567" stroke="#ffffff" stroke-width="2"/>
+<line x1="1394.8" x2="1394.8" y1="432" y2="567" stroke="#ffffff" stroke-width="2"/>
+<line x1="1681.5" x2="1681.5" y1="432" y2="567" stroke="#ffffff" stroke-width="2"/>
+<rect x="34" y="432" width="212" height="135" fill="#172a4d"/>
+<text x="140.0" y="480.5" text-anchor="middle" font-size="24" font-weight="700" fill="#fff">Data Sources</text>
+<text x="140.0" y="508.5" text-anchor="middle" font-size="16" fill="#dbe3f1">(SAP exports,</text>
+<text x="140.0" y="528.5" text-anchor="middle" font-size="16" fill="#dbe3f1">Zoho Inventory)</text>
+<rect x="246" y="569" width="1720" height="135" fill="#fff6e0"/>
+<line x1="534.7" x2="534.7" y1="569" y2="704" stroke="#ffffff" stroke-width="2"/>
+<line x1="821.4" x2="821.4" y1="569" y2="704" stroke="#ffffff" stroke-width="2"/>
+<line x1="1108.1" x2="1108.1" y1="569" y2="704" stroke="#ffffff" stroke-width="2"/>
+<line x1="1394.8" x2="1394.8" y1="569" y2="704" stroke="#ffffff" stroke-width="2"/>
+<line x1="1681.5" x2="1681.5" y1="569" y2="704" stroke="#ffffff" stroke-width="2"/>
+<rect x="34" y="569" width="212" height="135" fill="#172a4d"/>
+<text x="140.0" y="627.5" text-anchor="middle" font-size="24" font-weight="700" fill="#fff">Planning Engine</text>
+<text x="140.0" y="655.5" text-anchor="middle" font-size="16" fill="#dbe3f1">(App on Vercel)</text>
+<rect x="246" y="706" width="1720" height="135" fill="#f1ebfb"/>
+<line x1="534.7" x2="534.7" y1="706" y2="841" stroke="#ffffff" stroke-width="2"/>
+<line x1="821.4" x2="821.4" y1="706" y2="841" stroke="#ffffff" stroke-width="2"/>
+<line x1="1108.1" x2="1108.1" y1="706" y2="841" stroke="#ffffff" stroke-width="2"/>
+<line x1="1394.8" x2="1394.8" y1="706" y2="841" stroke="#ffffff" stroke-width="2"/>
+<line x1="1681.5" x2="1681.5" y1="706" y2="841" stroke="#ffffff" stroke-width="2"/>
+<rect x="34" y="706" width="212" height="135" fill="#172a4d"/>
+<text x="140.0" y="764.5" text-anchor="middle" font-size="24" font-weight="700" fill="#fff">AI Explanations</text>
+<text x="140.0" y="792.5" text-anchor="middle" font-size="16" fill="#dbe3f1">(Claude, optional)</text>
+<rect x="246" y="843" width="1720" height="135" fill="#e8f5ea"/>
+<line x1="534.7" x2="534.7" y1="843" y2="978" stroke="#ffffff" stroke-width="2"/>
+<line x1="821.4" x2="821.4" y1="843" y2="978" stroke="#ffffff" stroke-width="2"/>
+<line x1="1108.1" x2="1108.1" y1="843" y2="978" stroke="#ffffff" stroke-width="2"/>
+<line x1="1394.8" x2="1394.8" y1="843" y2="978" stroke="#ffffff" stroke-width="2"/>
+<line x1="1681.5" x2="1681.5" y1="843" y2="978" stroke="#ffffff" stroke-width="2"/>
+<rect x="34" y="843" width="212" height="135" fill="#172a4d"/>
+<text x="140.0" y="901.5" text-anchor="middle" font-size="24" font-weight="700" fill="#fff">Data Store</text>
+<text x="140.0" y="929.5" text-anchor="middle" font-size="16" fill="#dbe3f1">(Neon Postgres)</text>
+<rect x="246" y="980" width="1720" height="135" fill="#fde8ef"/>
+<line x1="534.7" x2="534.7" y1="980" y2="1115" stroke="#ffffff" stroke-width="2"/>
+<line x1="821.4" x2="821.4" y1="980" y2="1115" stroke="#ffffff" stroke-width="2"/>
+<line x1="1108.1" x2="1108.1" y1="980" y2="1115" stroke="#ffffff" stroke-width="2"/>
+<line x1="1394.8" x2="1394.8" y1="980" y2="1115" stroke="#ffffff" stroke-width="2"/>
+<line x1="1681.5" x2="1681.5" y1="980" y2="1115" stroke="#ffffff" stroke-width="2"/>
+<rect x="34" y="980" width="212" height="135" fill="#172a4d"/>
+<text x="140.0" y="1038.5" text-anchor="middle" font-size="24" font-weight="700" fill="#fff">Email Service</text>
+<text x="140.0" y="1066.5" text-anchor="middle" font-size="16" fill="#dbe3f1">(Resend)</text>
+<rect x="246" y="1117" width="1720" height="135" fill="#fdf0e4"/>
+<line x1="534.7" x2="534.7" y1="1117" y2="1252" stroke="#ffffff" stroke-width="2"/>
+<line x1="821.4" x2="821.4" y1="1117" y2="1252" stroke="#ffffff" stroke-width="2"/>
+<line x1="1108.1" x2="1108.1" y1="1117" y2="1252" stroke="#ffffff" stroke-width="2"/>
+<line x1="1394.8" x2="1394.8" y1="1117" y2="1252" stroke="#ffffff" stroke-width="2"/>
+<line x1="1681.5" x2="1681.5" y1="1117" y2="1252" stroke="#ffffff" stroke-width="2"/>
+<rect x="34" y="1117" width="212" height="135" fill="#172a4d"/>
+<text x="140.0" y="1165.5" text-anchor="middle" font-size="24" font-weight="700" fill="#fff">Team</text>
+<text x="140.0" y="1193.5" text-anchor="middle" font-size="16" fill="#dbe3f1">(Raghav, Procurement,</text>
+<text x="140.0" y="1213.5" text-anchor="middle" font-size="16" fill="#dbe3f1">Deepa)</text>
+<path d="M520.7,226.5 L1122.1,226.5" fill="none" stroke="#172a4d" stroke-width="2.2" stroke-dasharray="7 6" marker-end="url(#arr)"/>
+<path d="M1380.8,226.5 L1674.5,226.5 L1674.5,911.5 L1695.5,911.5" fill="none" stroke="#172a4d" stroke-width="2.2" stroke-dasharray="7 6" marker-end="url(#arr)"/>
+<path d="M520.7,363.5 L678.1,363.5 L678.1,444.0" fill="none" stroke="#172a4d" stroke-width="2.2" stroke-dasharray="7 6" marker-end="url(#arr)"/>
+<path d="M678.1,557.0 L678.1,581.0" fill="none" stroke="#172a4d" stroke-width="2.2" stroke-dasharray="7 6" marker-end="url(#arr)"/>
+<path d="M964.8,557.0 L964.8,581.0" fill="none" stroke="#172a4d" stroke-width="2.2" stroke-dasharray="7 6" marker-end="url(#arr)"/>
+<path d="M807.4,637.5 L835.4,637.5" fill="none" stroke="#172a4d" stroke-width="2.2" stroke-dasharray="7 6" marker-end="url(#arr)"/>
+<path d="M1094.1,637.5 L1122.1,637.5" fill="none" stroke="#172a4d" stroke-width="2.2" stroke-dasharray="7 6" marker-end="url(#arr)"/>
+<path d="M1380.8,637.5 L1695.5,637.5" fill="none" stroke="#172a4d" stroke-width="2.2" stroke-dasharray="7 6" marker-end="url(#arr)"/>
+<path d="M1340.8,694.0 L1340.8,709.0 L1538.1,709.0 L1538.1,718.0" fill="none" stroke="#172a4d" stroke-width="2.2" stroke-dasharray="7 6" marker-end="url(#arr)"/>
+<path d="M1538.1,831.0 L1538.1,911.5 L1380.8,911.5" fill="none" stroke="#172a4d" stroke-width="2.2" stroke-dasharray="7 6" marker-end="url(#arr)"/>
+<path d="M1251.4,968.0 L1251.4,1048.5 L1695.5,1048.5" fill="none" stroke="#172a4d" stroke-width="2.2" stroke-dasharray="7 6" marker-end="url(#arr)"/>
+<path d="M1824.8,1105.0 L1824.8,1129.0" fill="none" stroke="#172a4d" stroke-width="2.2" stroke-dasharray="7 6" marker-end="url(#arr)"/>
+<rect x="262.0" y="170.0" width="258.7" height="113.0" rx="12" fill="#dce7fc" stroke="#4a7fe0" stroke-width="3"/>
+<text x="391.4" y="210.5" text-anchor="middle" font-size="17" fill="#1c2633">Opens the dashboard after</text>
+<text x="391.4" y="232.5" text-anchor="middle" font-size="17" fill="#1c2633">each plan, or from the</text>
+<text x="391.4" y="254.5" text-anchor="middle" font-size="17" fill="#1c2633">email link</text>
+<rect x="1122.1" y="170.0" width="258.7" height="113.0" rx="12" fill="#dce7fc" stroke="#4a7fe0" stroke-width="3"/>
+<text x="1251.4" y="210.5" text-anchor="middle" font-size="17" fill="#1c2633">Approves or changes each</text>
+<text x="1251.4" y="232.5" text-anchor="middle" font-size="17" fill="#1c2633">SKU in place. Reason only</text>
+<text x="1251.4" y="254.5" text-anchor="middle" font-size="17" fill="#1c2633">for big changes.</text>
+<rect x="262.0" y="307.0" width="258.7" height="113.0" rx="12" fill="#e6dcfa" stroke="#8a5ad6" stroke-width="3"/>
+<text x="391.4" y="347.5" text-anchor="middle" font-size="17" fill="#1c2633">Mon &amp; Thu, 06:00 IST:</text>
+<text x="391.4" y="369.5" text-anchor="middle" font-size="17" fill="#1c2633">cron calls the run address</text>
+<text x="391.4" y="391.5" text-anchor="middle" font-size="17" fill="#1c2633">(secret in the header)</text>
+<rect x="548.7" y="444.0" width="258.7" height="113.0" rx="12" fill="#d3efe9" stroke="#2ca58d" stroke-width="3"/>
+<text x="678.1" y="484.5" text-anchor="middle" font-size="17" fill="#1c2633">SAP exports: weekly sales,</text>
+<text x="678.1" y="506.5" text-anchor="middle" font-size="17" fill="#1c2633">stock, SKU and distributor</text>
+<text x="678.1" y="528.5" text-anchor="middle" font-size="17" fill="#1c2633">lists, calendar</text>
+<rect x="835.4" y="444.0" width="258.7" height="113.0" rx="12" fill="#d3efe9" stroke="#2ca58d" stroke-width="3"/>
+<text x="964.8" y="484.5" text-anchor="middle" font-size="17" fill="#1c2633">Zoho Inventory: open</text>
+<text x="964.8" y="506.5" text-anchor="middle" font-size="17" fill="#1c2633">purchase orders with</text>
+<text x="964.8" y="528.5" text-anchor="middle" font-size="17" fill="#1c2633">expected delivery dates</text>
+<rect x="548.7" y="581.0" width="258.7" height="113.0" rx="12" fill="#fdedc0" stroke="#e0a810" stroke-width="3"/>
+<text x="678.1" y="621.5" text-anchor="middle" font-size="17" fill="#1c2633">Checks every file: gaps,</text>
+<text x="678.1" y="643.5" text-anchor="middle" font-size="17" fill="#1c2633">stale or negative stock,</text>
+<text x="678.1" y="665.5" text-anchor="middle" font-size="17" fill="#1c2633">duplicates. Retries 3 times.</text>
+<rect x="835.4" y="581.0" width="258.7" height="113.0" rx="12" fill="#fdedc0" stroke="#e0a810" stroke-width="3"/>
+<text x="964.8" y="621.5" text-anchor="middle" font-size="17" fill="#1c2633">Rules version, 12- and 4-week</text>
+<text x="964.8" y="643.5" text-anchor="middle" font-size="17" fill="#1c2633">averages, festival +25%,</text>
+<text x="964.8" y="665.5" text-anchor="middle" font-size="17" fill="#1c2633">orders arriving in time</text>
+<rect x="1122.1" y="581.0" width="258.7" height="113.0" rx="12" fill="#fdedc0" stroke="#e0a810" stroke-width="3"/>
+<text x="1251.4" y="621.5" text-anchor="middle" font-size="17" fill="#1c2633">5 rules: Reorder, Demand</text>
+<text x="1251.4" y="643.5" text-anchor="middle" font-size="17" fill="#1c2633">rising, Pause, OK. Unclear</text>
+<text x="1251.4" y="665.5" text-anchor="middle" font-size="17" fill="#1c2633">SKUs go to judgment.</text>
+<rect x="1408.8" y="718.0" width="258.7" height="113.0" rx="12" fill="#e9defa" stroke="#9a6ad8" stroke-width="3"/>
+<text x="1538.1" y="758.5" text-anchor="middle" font-size="17" fill="#1c2633">One-line reason per SKU.</text>
+<text x="1538.1" y="780.5" text-anchor="middle" font-size="17" fill="#1c2633">Numbers checked; never</text>
+<text x="1538.1" y="802.5" text-anchor="middle" font-size="17" fill="#1c2633">changes a flag or quantity.</text>
+<rect x="1122.1" y="855.0" width="258.7" height="113.0" rx="12" fill="#d5efda" stroke="#3a9a52" stroke-width="3"/>
+<text x="1251.4" y="895.5" text-anchor="middle" font-size="17" fill="#1c2633">Neon saves the run, data</text>
+<text x="1251.4" y="917.5" text-anchor="middle" font-size="17" fill="#1c2633">coverage, every suggestion</text>
+<text x="1251.4" y="939.5" text-anchor="middle" font-size="17" fill="#1c2633">and its calculation.</text>
+<rect x="1695.5" y="855.0" width="258.7" height="113.0" rx="12" fill="#d5efda" stroke="#3a9a52" stroke-width="3"/>
+<text x="1824.8" y="895.5" text-anchor="middle" font-size="17" fill="#1c2633">Decision history: approve,</text>
+<text x="1824.8" y="917.5" text-anchor="middle" font-size="17" fill="#1c2633">change, undo; who, when,</text>
+<text x="1824.8" y="939.5" text-anchor="middle" font-size="17" fill="#1c2633">why. Nothing deleted.</text>
+<rect x="1695.5" y="581.0" width="258.7" height="113.0" rx="12" fill="#ffffff" stroke="#e0474c" stroke-width="3"/>
+<text x="1824.8" y="621.5" text-anchor="middle" font-size="17" fill="#1c2633">Dashboard: Today, Decisions,</text>
+<text x="1824.8" y="643.5" text-anchor="middle" font-size="17" fill="#1c2633">Analytics, Settings.</text>
+<text x="1824.8" y="665.5" text-anchor="middle" font-size="17" fill="#1c2633">Excel export and upload.</text>
+<rect x="1695.5" y="992.0" width="258.7" height="113.0" rx="12" fill="#fbd8e4" stroke="#d9507e" stroke-width="3"/>
+<text x="1824.8" y="1032.5" text-anchor="middle" font-size="17" fill="#1c2633">Resend: &quot;N SKUs need review&quot;</text>
+<text x="1824.8" y="1054.5" text-anchor="middle" font-size="17" fill="#1c2633">+ Excel, Friday summary,</text>
+<text x="1824.8" y="1076.5" text-anchor="middle" font-size="17" fill="#1c2633">failure notices.</text>
+<rect x="1695.5" y="1129.0" width="258.7" height="113.0" rx="12" fill="#ffffff" stroke="#e0474c" stroke-width="3"/>
+<text x="1824.8" y="1169.5" text-anchor="middle" font-size="17" fill="#1c2633">Raghav: decides each SKU.</text>
+<text x="1824.8" y="1191.5" text-anchor="middle" font-size="17" fill="#1c2633">Procurement: orders.</text>
+<text x="1824.8" y="1213.5" text-anchor="middle" font-size="17" fill="#1c2633">Deepa: weekly metrics.</text>
+<text x="34" y="1296" font-size="18" fill="#5b6575">Dashed arrows follow one planning run from the Monday/Thursday trigger to the people who act on it. Red boxes are what the Freshroots team sees.</text>
+</svg>

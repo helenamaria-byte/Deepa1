@@ -11,6 +11,8 @@ process. It is a **rules engine with a human review loop**, not a forecasting mo
 
 ## How it works
 
+![Components map](docs/components-map.svg)
+
 ```
 SAP CSV exports ──► Connector ──► Validation ──► Rules engine ──► Explanations ──► Database
  (5 files)          (csv/https/    (reason codes)  (5 rules +       (Claude or        │
